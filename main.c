@@ -39,7 +39,6 @@ Value* mul(Value* v1, Value* v2, char* label) {
 Value* htan(Value* v, char* label) {
     char buffer[50];
     sprintf(buffer, "Value(data=%.2f)\n", v->data);
-    float e = 2.71828;
     float t = (exp(2 * v->data) - 1) / (exp(2 * v->data) + 1);
     return newValue(t, "tanh", buffer, label);
 }
