@@ -1,60 +1,69 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <math.h>
 
 typedef struct {
     float data;
+    char operation[10];
     char previous[50];
-    char operation;
-    char label;
+    char label[10];
 } Value;
 
 // Constructor for Value
-Value* newValue(float data, char operation, char* previous, char label) {
+Value* newValue(float data, char* operation, char* previous, char* label) {
     Value* v = malloc(sizeof(Value));
     if (v == NULL) {
         fprintf(stderr, "Memory allocation failed\n");
         exit(EXIT_FAILURE); // Always check for malloc failure
     }
     v->data = data;
-    v->operation = operation;
+    strcpy(v->operation, operation);
     strcpy(v->previous, previous);
-    v->label = label;
+    strcpy(v->label, label);
     return v;
 }
 
-// Method to add Values
-Value* addValues(Value* v1, Value* v2, char label) {
+Value* sum(Value* v1, Value* v2, char* label) {
     char buffer[50];
     sprintf(buffer, "Value(data=%.2f), Value(data=%.2f)\n", v1->data, v2->data);
-    return newValue(v1->data + v2->data, '+', buffer, label);
+    return newValue(v1->data + v2->data, "+", buffer, label);
 }
 
-// Method to multiply Values
-Value* multiplyValues(Value* v1, Value* v2, char label) {
+Value* mul(Value* v1, Value* v2, char* label) {
     char buffer[50];
     sprintf(buffer, "Value(data=%.2f), Value(data=%.2f)\n", v1->data, v2->data);
-    return newValue(v1->data * v2->data, '*', buffer, label);
+    return newValue(v1->data * v2->data, "*", buffer, label);
 }
 
-// Display the Value
+Value* htan(Value* v, char* label) {
+    char buffer[50];
+    sprintf(buffer, "Value(data=%.2f)\n", v->data);
+    float e = 2.71828;
+    float t = (exp(2 * v->data) - 1) / (exp(2 * v->data) + 1);
+    return newValue(t, "tanh", buffer, label);
+}
+
 void displayValue(Value* v) {
-    printf("Value(data=%.2f, previous=%s, operation=%c)\n", v->data, v->previous, v->operation);
+    printf("Value(data=%.2f, previous=%s, operation=%s)\n", v->data, v->previous, v->operation);
 }
 
 int main() {
-    Value* w = newValue(10, '\0', "", 'w');
-    Value* v = newValue(20, '\0', "", 'v');
+    Value* w = newValue(10, "", "", "w");
+    Value* v = newValue(20, "", "", "w");
 
-    Value* sum = addValues(w, v, 's');
-    displayValue(sum);
-    Value* product = multiplyValues(w, v, 'p');
-    displayValue(product);
+    Value* s = sum(w, v, "s");
+    displayValue(s);
+    Value* p = mul(w, v, "p");
+    displayValue(p);
+    Value* t = htan(p, "t");
+    displayValue(t);
 
     free(w);
     free(v);
-    free(sum);
-    free(product);
+    free(s);
+    free(p);
+    free(t);
 
     return 0;
 }
