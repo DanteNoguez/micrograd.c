@@ -6,12 +6,13 @@
 typedef struct {
     float data;
     char* operation;
-    char* previous;
+    struct Value** previous;
     char* label;
+    float grad;
 } Value;
 
 // Constructor for Value
-Value* newValue(float data, char* operation, char* previous, char* label) {
+Value* newValue(float data, char* operation, struct Value** previous, char* label, float grad) {
     Value* v = malloc(sizeof(Value));
     if (v == NULL) {
         fprintf(stderr, "Memory allocation failed\n");
@@ -21,6 +22,7 @@ Value* newValue(float data, char* operation, char* previous, char* label) {
     v->operation = operation;
     v->previous = previous;
     v->label = label;
+    v->grad = grad;
     return v;
 }
 
@@ -43,7 +45,7 @@ Value* mul(Value* v1, Value* v2, char* label) {
         exit(EXIT_FAILURE);
     }
     sprintf(buffer, "Value(data=%.2f), Value(data=%.2f)\n", v1->data, v2->data);
-    return newValue(v1->data * v2->data, "+", buffer, label);
+    return newValue(v1->data * v2->data, "*", buffer, label);
 }
 
 Value* htan(Value* v, char* label) {
@@ -59,13 +61,20 @@ Value* htan(Value* v, char* label) {
     return result;
 }
 
+float _backward(Value* v) {
+    if (strcmp(v->operation, "tanh") == 0) {
+        return 1 - pow(v->data, 2);
+    }
+    return 0;
+}
+
 void displayValue(Value* v) {
     printf("Value(data=%.2f, previous=%s, operation=%s)\n", v->data, v->previous, v->operation);
 }
 
 int main() {
-    Value* w = newValue(10, "", "", "w");
-    Value* v = newValue(20, "", "", "w");
+    Value* w = newValue(10, NULL, NULL, "w", 0);
+    Value* v = newValue(20, NULL, NULL, "w", 0);
 
     Value* s = sum(w, v, "s");
     displayValue(s);
@@ -73,6 +82,9 @@ int main() {
     displayValue(p);
     Value* t = htan(p, "t");
     displayValue(t);
+    float grad = _backward(t);
+    printf("Gradient: %.2f\n", grad);
+    float grad_p = _backward(p);
 
     free(w);
     free(v);
