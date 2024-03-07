@@ -5,9 +5,9 @@
 
 typedef struct {
     float data;
-    char operation[10];
-    char previous[50];
-    char label[10];
+    char* operation;
+    char* previous;
+    char* label;
 } Value;
 
 // Constructor for Value
@@ -15,32 +15,48 @@ Value* newValue(float data, char* operation, char* previous, char* label) {
     Value* v = malloc(sizeof(Value));
     if (v == NULL) {
         fprintf(stderr, "Memory allocation failed\n");
-        exit(EXIT_FAILURE); // Always check for malloc failure
+        exit(EXIT_FAILURE);
     }
     v->data = data;
-    strcpy(v->operation, operation);
-    strcpy(v->previous, previous);
-    strcpy(v->label, label);
+    v->operation = operation;
+    v->previous = previous;
+    v->label = label;
     return v;
 }
 
 Value* sum(Value* v1, Value* v2, char* label) {
-    char buffer[50];
+    int buffer_size = snprintf(NULL, 0, "Value(data=%.2f), Value(data=%.2f)\n", v1->data, v2->data) + 1; // +1 for '\0'
+    char* buffer = malloc(buffer_size);
+    if (buffer == NULL) {
+        fprintf(stderr, "Memory allocation failed\n");
+        exit(EXIT_FAILURE);
+    }
     sprintf(buffer, "Value(data=%.2f), Value(data=%.2f)\n", v1->data, v2->data);
     return newValue(v1->data + v2->data, "+", buffer, label);
 }
 
 Value* mul(Value* v1, Value* v2, char* label) {
-    char buffer[50];
+    int buffer_size = snprintf(NULL, 0, "Value(data=%.2f), Value(data=%.2f)\n", v1->data, v2->data) + 1; // +1 for '\0'
+    char* buffer = malloc(buffer_size);
+    if (buffer == NULL) {
+        fprintf(stderr, "Memory allocation failed\n");
+        exit(EXIT_FAILURE);
+    }
     sprintf(buffer, "Value(data=%.2f), Value(data=%.2f)\n", v1->data, v2->data);
-    return newValue(v1->data * v2->data, "*", buffer, label);
+    return newValue(v1->data * v2->data, "+", buffer, label);
 }
 
 Value* htan(Value* v, char* label) {
-    char buffer[50];
+    int buffer_size = snprintf(NULL, 0, "Value(data=%.2f)\n", v->data) + 1; // +1 for '\0'
+    char* buffer = malloc(buffer_size);
+    if (buffer == NULL) {
+        fprintf(stderr, "Memory allocation failed\n");
+        exit(EXIT_FAILURE);
+    }
     sprintf(buffer, "Value(data=%.2f)\n", v->data);
     float t = (exp(2 * v->data) - 1) / (exp(2 * v->data) + 1);
-    return newValue(t, "tanh", buffer, label);
+    Value* result = newValue(t, "tanh", buffer, label);
+    return result;
 }
 
 void displayValue(Value* v) {
