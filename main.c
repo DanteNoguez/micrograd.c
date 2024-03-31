@@ -3,19 +3,19 @@
 #include <string.h>
 #include <math.h>
 
-typedef struct {
+typedef struct Value {
     float data;
-    char* operation;
-    struct Value** previous;
-    char* label;
+    char *operation;
+    struct Value **previous;
+    char *label;
     float grad;
 } Value;
 
 // Constructor for Value
-Value* newValue(float data, char* operation, struct Value** previous, char* label, float grad) {
-    Value* v = malloc(sizeof(Value));
+Value *newValue(float data, char *operation, struct Value **previous, char *label, float grad) {
+    Value *v = malloc(sizeof(Value));
     if (v == NULL) {
-        fprintf(stderr, "Memory allocation failed\n");
+        fprintf(stderr, "Memory allocation for new value failed\n");
         exit(EXIT_FAILURE);
     }
     v->data = data;
@@ -26,71 +26,90 @@ Value* newValue(float data, char* operation, struct Value** previous, char* labe
     return v;
 }
 
-Value* sum(Value* v1, Value* v2, char* label) {
-    int buffer_size = snprintf(NULL, 0, "Value(data=%.2f), Value(data=%.2f)\n", v1->data, v2->data) + 1; // +1 for '\0'
-    char* buffer = malloc(buffer_size);
-    if (buffer == NULL) {
-        fprintf(stderr, "Memory allocation failed\n");
+Value **createValuePointerArray(Value *v1, Value *v2) {
+    int size = (v2 == NULL) ? 1 : 2; 
+    Value **array = malloc(size * sizeof(Value*)); 
+    if (array == NULL) {
+        fprintf(stderr, "Memory allocation for pointer array failed\n");
         exit(EXIT_FAILURE);
     }
-    sprintf(buffer, "Value(data=%.2f), Value(data=%.2f)\n", v1->data, v2->data);
-    return newValue(v1->data + v2->data, "+", buffer, label);
+    array[0] = v1;
+    if (v2 != NULL) {
+        array[1] = v2;
+    }
+    return array;
 }
 
-Value* mul(Value* v1, Value* v2, char* label) {
-    int buffer_size = snprintf(NULL, 0, "Value(data=%.2f), Value(data=%.2f)\n", v1->data, v2->data) + 1; // +1 for '\0'
-    char* buffer = malloc(buffer_size);
-    if (buffer == NULL) {
-        fprintf(stderr, "Memory allocation failed\n");
-        exit(EXIT_FAILURE);
-    }
-    sprintf(buffer, "Value(data=%.2f), Value(data=%.2f)\n", v1->data, v2->data);
-    return newValue(v1->data * v2->data, "*", buffer, label);
+Value *sum(Value *v1, Value *v2, char *label) {
+    Value **previous = createValuePointerArray(v1, v2);
+    return newValue(v1->data + v2->data, "+", previous, label, 0.0);
 }
 
-Value* htan(Value* v, char* label) {
-    int buffer_size = snprintf(NULL, 0, "Value(data=%.2f)\n", v->data) + 1; // +1 for '\0'
-    char* buffer = malloc(buffer_size);
-    if (buffer == NULL) {
-        fprintf(stderr, "Memory allocation failed\n");
-        exit(EXIT_FAILURE);
-    }
-    sprintf(buffer, "Value(data=%.2f)\n", v->data);
+Value *mul(Value *v1, Value *v2, char *label) {
+    Value **previous = createValuePointerArray(v1, v2);
+    return newValue(v1->data * v2->data, "*", previous, label, 0.0);
+}
+
+Value *htan(Value *v, char *label) {
+    Value **previous = createValuePointerArray(v, NULL);
     float t = (exp(2 * v->data) - 1) / (exp(2 * v->data) + 1);
-    Value* result = newValue(t, "tanh", buffer, label);
-    return result;
+    return newValue(t, "tanh", previous, label, 1.0);
 }
 
-float _backward(Value* v) {
+float _backward(Value *v) {
+    if (v->operation == NULL) {
+        // no grad to compute
+    }
     if (strcmp(v->operation, "tanh") == 0) {
-        return 1 - pow(v->data, 2);
+        printf("Backpropagating tanh\n");
+        v->previous[0]->grad = 1 - pow(v->data, 2);
+    }
+    else if (strcmp(v->operation, "+") == 0) {
+        v->previous[0]->grad = (v->previous != NULL && v->previous[0] != NULL) ? 1.0 * v->grad : 0.0;
+        v->previous[1]->grad = (v->previous != NULL && v->previous[1] != NULL) ? 1.0 * v->grad : 0.0;
+    }
+    else if (strcmp(v->operation, "*") == 0) {
+        if (v->previous != NULL && v->previous[0] != NULL && v->previous[1] != NULL) {
+            v->previous[0]->grad = v->previous[1]->data * v->grad;
+            v->previous[1]->grad = v->previous[0]->data * v->grad;
+        }
     }
     return 0;
 }
 
-void displayValue(Value* v) {
-    printf("Value(data=%.2f, previous=%s, operation=%s)\n", v->data, v->previous, v->operation);
+void displayValue(Value *v) {
+    float previous1 = (v->previous != NULL && v->previous[0] != NULL) ? v->previous[0]->data : 0;
+    float previous2 = (v->previous != NULL && v->previous[1] != NULL) ? v->previous[1]->data : 0;
+    printf("%s Value(data=%.2f, previous=(%.2f, %.2f), operation=%s, grad=%.2f)\n", v->label, v->data, previous1, previous2, v->operation, v->grad);
 }
 
 int main() {
-    Value* w = newValue(10, NULL, NULL, "w", 0);
-    Value* v = newValue(20, NULL, NULL, "w", 0);
+    Value *w = newValue(-3.0, NULL, NULL, "w", 0.0);
+    Value *v = newValue(0.5, NULL, NULL, "v", 0.0);
+    Value *z = newValue(4.0, NULL, NULL, "z", 0.0);
 
-    Value* s = sum(w, v, "s");
+    Value *s = sum(z, w, "s");
     displayValue(s);
-    Value* p = mul(w, v, "p");
+    Value *p = mul(v, s, "p");
     displayValue(p);
-    Value* t = htan(p, "t");
-    displayValue(t);
-    float grad = _backward(t);
-    printf("Gradient: %.2f\n", grad);
-    float grad_p = _backward(p);
+    Value *Loss = htan(p, "Loss");
+    displayValue(Loss);
+    _backward(Loss);
+    _backward(p);
+    _backward(s);
+    displayValue(Loss);
+    displayValue(p);
+    displayValue(s);
+    displayValue(w);
+    displayValue(v);
+    displayValue(z);
 
     free(w);
     free(v);
+    free(z);
     free(s);
     free(p);
-    free(t);
+    free(Loss);
 
     return 0;
 }
