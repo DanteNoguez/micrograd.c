@@ -62,7 +62,7 @@ float _backward(Value *v) {
     }
     if (strcmp(v->operation, "tanh") == 0) {
         printf("Backpropagating tanh\n");
-        v->previous[0]->grad = 1 - pow(v->data, 2);
+        v->previous[0]->grad = (1 - pow(v->data, 2)) * v->grad;
     }
     else if (strcmp(v->operation, "+") == 0) {
         v->previous[0]->grad = (v->previous != NULL && v->previous[0] != NULL) ? 1.0 * v->grad : 0.0;
@@ -78,9 +78,9 @@ float _backward(Value *v) {
 }
 
 void displayValue(Value *v) {
-    float previous1 = (v->previous != NULL && v->previous[0] != NULL) ? v->previous[0]->data : 0;
-    float previous2 = (v->previous != NULL && v->previous[1] != NULL) ? v->previous[1]->data : 0;
-    printf("%s Value(data=%.2f, previous=(%.2f, %.2f), operation=%s, grad=%.2f)\n", v->label, v->data, previous1, previous2, v->operation, v->grad);
+    float previous1 = (v->previous != NULL && v->previous[0] != NULL) ? v->previous[0]->data : 0.0;
+    float previous2 = (v->previous != NULL && v->previous[1] != NULL) ? v->previous[1]->data : 0.0;
+    printf("%s Value(data=%.1f, previous=(%.1f, %.1f), operation=%s, grad=%.2f)\n", v->label, v->data, previous1, previous2, v->operation, v->grad);
 }
 
 int main() {
