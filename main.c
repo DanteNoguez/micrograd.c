@@ -56,13 +56,25 @@ Value *htan(Value *v, char *label) {
     return newValue(t, "tanh", previous, label, 0.0);
 }
 
+Value *euler(Value *v, char *label) {
+    Value **previous = createValuePointerArray(v, NULL);
+    float e = exp(v->data);
+    return newValue(e, "exp", previous, label, 0.0);
+}
+
+Value *pow2(Value *v, char *label) {
+    Value **previous = createValuePointerArray(v, NULL);
+    float p = pow(v->data, 2);
+    return newValue(p, "pow2", previous, label, 0.0);
+}
+
+
 void _backward(Value *v) {
     if (v->operation == NULL) {
         // no grad to compute
         return;
     }
     if (strcmp(v->operation, "tanh") == 0) {
-        printf("Backpropagating tanh\n");
         v->previous[0]->grad += (1 - pow(v->data, 2)) * v->grad;
         _backward(v->previous[0]);
     }
@@ -80,6 +92,14 @@ void _backward(Value *v) {
             _backward(v->previous[1]);
         }
     }
+    else if (strcmp(v->operation, "exp") == 0) {
+        v->previous[0]->grad += v->data * v->grad;
+        _backward(v->previous[0]);
+    }
+    else if (strcmp(v->operation, "pow2") == 0) {
+        v->previous[0]->grad += (2 * v->data) * v->grad;
+        _backward(v->previous[0]);
+    }
 }
 
 void displayValue(Value *v) {
@@ -96,7 +116,7 @@ int main() {
     Value *s = sum(z, w, "sum");
     Value *p = mul(v, s, "prod");
     Value *Loss = htan(p, "Loss");
-
+    
     Loss->grad = 1.0;
     _backward(Loss);
     displayValue(Loss);
