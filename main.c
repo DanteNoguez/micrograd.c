@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
+#include <time.h>
 
 typedef struct Value {
     float data;
@@ -39,6 +40,22 @@ Value **createValuePointerArray(Value *v1, Value *v2) {
     }
     return array;
 }
+
+float random_uniform(float min, float max) {
+    srand((unsigned int)time(NULL));
+    float normalized = rand() / (float)RAND_MAX; // Generate a number between 0 and 1
+    float range = max - min; // Calculate the range
+    float random = (normalized * range) + min; // Scale and shift the number to the desired range
+    return random;
+}
+
+// Value *neuron_constructor(int nin, float *x) {
+//     int i;
+//     for (i = 0; i < nin; i++) {
+//         Value *input = newValue(x[i], NULL, NULL, NULL, 0.0);
+//         Value *weight = newValue(random_uniform(-1, 1), NULL, NULL, NULL, 0.0);
+//     }
+// }
 
 Value *sum(Value *v1, Value *v2, char *label) {
     Value **previous = createValuePointerArray(v1, v2);
@@ -116,7 +133,7 @@ int main() {
     Value *s = sum(z, w, "sum");
     Value *p = mul(v, s, "prod");
     Value *Loss = htan(p, "Loss");
-    
+
     Loss->grad = 1.0;
     _backward(Loss);
     displayValue(Loss);
