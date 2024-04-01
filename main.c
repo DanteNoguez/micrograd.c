@@ -56,31 +56,30 @@ Value *htan(Value *v, char *label) {
     return newValue(t, "tanh", previous, label, 0.0);
 }
 
-float _backward(Value *v) {
+void _backward(Value *v) {
     if (v->operation == NULL) {
         // no grad to compute
-        return 0;
+        return;
     }
     if (strcmp(v->operation, "tanh") == 0) {
         printf("Backpropagating tanh\n");
-        v->previous[0]->grad = (1 - pow(v->data, 2)) * v->grad;
+        v->previous[0]->grad += (1 - pow(v->data, 2)) * v->grad;
         _backward(v->previous[0]);
     }
     else if (strcmp(v->operation, "+") == 0) {
-        v->previous[0]->grad = (v->previous != NULL && v->previous[0] != NULL) ? 1.0 * v->grad : 0.0;
-        v->previous[1]->grad = (v->previous != NULL && v->previous[1] != NULL) ? 1.0 * v->grad : 0.0;
+        v->previous[0]->grad += (v->previous != NULL && v->previous[0] != NULL) ? 1.0 * v->grad : 0.0;
+        v->previous[1]->grad += (v->previous != NULL && v->previous[1] != NULL) ? 1.0 * v->grad : 0.0;
         _backward(v->previous[0]);
         _backward(v->previous[1]);
     }
     else if (strcmp(v->operation, "*") == 0) {
         if (v->previous != NULL && v->previous[0] != NULL && v->previous[1] != NULL) {
-            v->previous[0]->grad = v->previous[1]->data * v->grad;
-            v->previous[1]->grad = v->previous[0]->data * v->grad;
+            v->previous[0]->grad += v->previous[1]->data * v->grad;
+            v->previous[1]->grad += v->previous[0]->data * v->grad;
             _backward(v->previous[0]);
             _backward(v->previous[1]);
         }
     }
-    return 0;
 }
 
 void displayValue(Value *v) {
