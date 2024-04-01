@@ -53,25 +53,31 @@ Value *mul(Value *v1, Value *v2, char *label) {
 Value *htan(Value *v, char *label) {
     Value **previous = createValuePointerArray(v, NULL);
     float t = (exp(2 * v->data) - 1) / (exp(2 * v->data) + 1);
-    return newValue(t, "tanh", previous, label, 1.0);
+    return newValue(t, "tanh", previous, label, 0.0);
 }
 
 float _backward(Value *v) {
     if (v->operation == NULL) {
         // no grad to compute
+        return 0;
     }
     if (strcmp(v->operation, "tanh") == 0) {
         printf("Backpropagating tanh\n");
         v->previous[0]->grad = (1 - pow(v->data, 2)) * v->grad;
+        _backward(v->previous[0]);
     }
     else if (strcmp(v->operation, "+") == 0) {
         v->previous[0]->grad = (v->previous != NULL && v->previous[0] != NULL) ? 1.0 * v->grad : 0.0;
         v->previous[1]->grad = (v->previous != NULL && v->previous[1] != NULL) ? 1.0 * v->grad : 0.0;
+        _backward(v->previous[0]);
+        _backward(v->previous[1]);
     }
     else if (strcmp(v->operation, "*") == 0) {
         if (v->previous != NULL && v->previous[0] != NULL && v->previous[1] != NULL) {
             v->previous[0]->grad = v->previous[1]->data * v->grad;
             v->previous[1]->grad = v->previous[0]->data * v->grad;
+            _backward(v->previous[0]);
+            _backward(v->previous[1]);
         }
     }
     return 0;
@@ -80,7 +86,7 @@ float _backward(Value *v) {
 void displayValue(Value *v) {
     float previous1 = (v->previous != NULL && v->previous[0] != NULL) ? v->previous[0]->data : 0.0;
     float previous2 = (v->previous != NULL && v->previous[1] != NULL) ? v->previous[1]->data : 0.0;
-    printf("%s Value(data=%.1f, previous=(%.1f, %.1f), operation=%s, grad=%.2f)\n", v->label, v->data, previous1, previous2, v->operation, v->grad);
+    printf("%s Value(data=%.2f, previous=(%.2f, %.2f), operation=%s, grad=%.2f)\n", v->label, v->data, previous1, previous2, v->operation, v->grad);
 }
 
 int main() {
@@ -88,15 +94,12 @@ int main() {
     Value *v = newValue(0.5, NULL, NULL, "v", 0.0);
     Value *z = newValue(4.0, NULL, NULL, "z", 0.0);
 
-    Value *s = sum(z, w, "s");
-    displayValue(s);
-    Value *p = mul(v, s, "p");
-    displayValue(p);
+    Value *s = sum(z, w, "sum");
+    Value *p = mul(v, s, "prod");
     Value *Loss = htan(p, "Loss");
-    displayValue(Loss);
+
+    Loss->grad = 1.0;
     _backward(Loss);
-    _backward(p);
-    _backward(s);
     displayValue(Loss);
     displayValue(p);
     displayValue(s);
