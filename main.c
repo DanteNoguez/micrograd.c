@@ -26,7 +26,12 @@ typedef struct Layer {
     int nout;
 } Layer;
 
-bool DEBUG = false;
+typedef struct MLP {
+    struct Layer **layers;
+    int nouts_size;
+} MLP;
+
+bool DEBUG = true;
 
 // Constructor for Value
 Value *newValue(float data, char *operation, struct Value **previous, char *label, float grad, bool requires_grad) {
@@ -70,6 +75,9 @@ Neuron *createNeuron(int nin, float *x) {
     Value *bias = malloc(sizeof(Value));
     Value **inputs = malloc(nin * sizeof(Value*));
     for (int i = 0; i < nin; i++) {
+        if (DEBUG == true) {
+            printf("Input [%d] = %f\n", i, x[i]);
+        }
         inputs[i] = newValue(x[i], NULL, NULL, NULL, 0.0, false);
         char *label = malloc(10 * sizeof(char)); // we're assuming up to four digit number of weights
         sprintf(label, "weight[%d]", i);
@@ -128,11 +136,7 @@ void _backward(Value *v) {
         // no grad to compute
         return;
     }
-    if (strcmp(v->operation, "tanh") == 0) {
-        v->previous[0]->grad += (1 - pow(v->data, 2)) * v->grad;
-        _backward(v->previous[0]);
-    }
-    else if (strcmp(v->operation, "+") == 0) {
+    if (strcmp(v->operation, "+") == 0) {
         v->previous[0]->grad += (v->previous != NULL && v->previous[0] != NULL) ? 1.0 * v->grad : 0.0;
         v->previous[1]->grad += (v->previous != NULL && v->previous[1] != NULL) ? 1.0 * v->grad : 0.0;
         _backward(v->previous[0]);
@@ -145,6 +149,10 @@ void _backward(Value *v) {
             _backward(v->previous[0]);
             _backward(v->previous[1]);
         }
+    }
+    else if (strcmp(v->operation, "tanh") == 0) {
+        v->previous[0]->grad += (1 - pow(v->data, 2)) * v->grad;
+        _backward(v->previous[0]);
     }
     else if (strcmp(v->operation, "exp") == 0) {
         v->previous[0]->grad += v->data * v->grad;
@@ -206,21 +214,48 @@ Value **forward_layer(Layer *layer) {
     return outputs;
 }
 
+MLP *createMLP(int nin, int *nouts, int nouts_size, float *x) {
+    Layer **layers = malloc(nouts_size * sizeof(Layer*));
+    for (int i = 0; i < nouts_size; i++) {
+        int layer_nin = (i == 0) ? nin : nouts[i-1];
+        layers[i] = createLayer(layer_nin, nouts[i], x);
+    }
+    MLP *mlp = malloc(sizeof(MLP));
+    mlp->layers = layers;
+    mlp->nouts_size = nouts_size;
+    return mlp;
+}
+
+Value ***forward_MLP(MLP *mlp) {
+    Value ***outputs = malloc(mlp->nouts_size * sizeof(Value**));
+    for (int i = 0; i < mlp->nouts_size; i++) {
+        outputs[i] = forward_layer(mlp->layers[i]);
+    }
+    return outputs;
+}
+
 int main() {
     srand((unsigned int)time(NULL));
-    float *array = malloc(3 * sizeof(float));
-    array[0] = 1.0;
-    array[1] = -2.0;
-    array[2] = 3.0;
-    Layer *layer = createLayer(3, 2, array);
-    Value **out = forward_layer(layer);
-    out[0]->grad = 1.0;
-    out[1]->grad = 1.0;
-    _backward(out[0]);
-    _backward(out[1]);
-    displayValue(out[0]);
-    displayValue(out[1]);
-    free(layer);
+    float *data = malloc(3 * sizeof(float));
+    data[0] = 1.0;
+    data[1] = -2.0;
+    data[2] = 3.0;
+    int *nouts = malloc(3 * sizeof(float));
+    nouts[0] = 4;
+    nouts[1] = 4;
+    nouts[2] = 1;
+    MLP *mlp = createMLP(3, nouts, 3, data);
+    Value ***out = forward_MLP(mlp);
+    displayValue(out[0][0]);
+    out[0][0]->grad = 1.0;
+    _backward(out[0][0]);
+    displayValue(out[0][0]);
+    for (int i = 0; i < mlp->nouts_size; i++) {
+        free(out[i]);
+    }
     free(out);
+    free(mlp->layers);
+    free(mlp);
+    free(data);
     return 0;
 }
