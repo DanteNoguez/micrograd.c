@@ -3,6 +3,7 @@
 #include <string.h>
 #include <math.h>
 #include <time.h>
+#include <stdbool.h>
 
 typedef struct Value {
     float data;
@@ -10,10 +11,22 @@ typedef struct Value {
     struct Value **previous;
     char *label;
     float grad;
+    bool requires_grad;
 } Value;
 
+typedef struct Neuron {
+    struct Value **weights;
+    struct Value *bias;
+    struct Value **inputs;
+    int nin;
+} Neuron;
+
+typedef struct Layer {
+    struct Neuron **neurons;
+} Layer;
+
 // Constructor for Value
-Value *newValue(float data, char *operation, struct Value **previous, char *label, float grad) {
+Value *newValue(float data, char *operation, struct Value **previous, char *label, float grad, bool requires_grad) {
     Value *v = malloc(sizeof(Value));
     if (v == NULL) {
         fprintf(stderr, "Memory allocation for new value failed\n");
@@ -24,6 +37,7 @@ Value *newValue(float data, char *operation, struct Value **previous, char *labe
     v->previous = previous;
     v->label = label;
     v->grad = grad;
+    v->requires_grad = requires_grad;
     return v;
 }
 
@@ -43,51 +57,66 @@ Value **createValuePointerArray(Value *v1, Value *v2) {
 
 float random_uniform(float min, float max) {
     srand((unsigned int)time(NULL));
-    float normalized = rand() / (float)RAND_MAX; // Generate a number between 0 and 1
-    float range = max - min; // Calculate the range
-    float random = (normalized * range) + min; // Scale and shift the number to the desired range
+    float normalized = rand() / (float)RAND_MAX;
+    float range = max - min;
+    float random = (normalized * range) + min; 
     return random;
 }
 
-// Value *neuron_constructor(int nin, float *x) {
-//     int i;
-//     for (i = 0; i < nin; i++) {
-//         Value *input = newValue(x[i], NULL, NULL, NULL, 0.0);
-//         Value *weight = newValue(random_uniform(-1, 1), NULL, NULL, NULL, 0.0);
-//     }
-// }
+Neuron *createNeuron(int nin, float *x) {
+    Value **weights = malloc(nin * sizeof(Value*));
+    Value *bias = malloc(sizeof(Value));
+    Value **inputs = malloc(nin * sizeof(Value*));
+    for (int i = 0; i < nin; i++) {
+        inputs[i] = newValue(x[i], NULL, NULL, NULL, 0.0, false);
+        char *label = malloc(10 * sizeof(char)); // we're assuming up to four digit number of weights
+        sprintf(label, "weight[%d]", i);
+        weights[i] = newValue(random_uniform(-1, 1), NULL, NULL, label, 0.0, true);
+    }
+    bias = newValue(random_uniform(-1, 1), NULL, NULL, "bias", 0.0, true);
+    Neuron *neuron = malloc(sizeof(Neuron));
+    neuron->bias = bias;
+    neuron->weights = weights;
+    neuron->inputs = inputs;
+    neuron->nin = nin;
+    return neuron;
+}
 
 Value *sum(Value *v1, Value *v2, char *label) {
     Value **previous = createValuePointerArray(v1, v2);
-    return newValue(v1->data + v2->data, "+", previous, label, 0.0);
+    return newValue(v1->data + v2->data, "+", previous, label, 0.0, true);
 }
 
 Value *mul(Value *v1, Value *v2, char *label) {
     Value **previous = createValuePointerArray(v1, v2);
-    return newValue(v1->data * v2->data, "*", previous, label, 0.0);
+    return newValue(v1->data * v2->data, "*", previous, label, 0.0, true);
 }
 
 Value *htan(Value *v, char *label) {
     Value **previous = createValuePointerArray(v, NULL);
     float t = (exp(2 * v->data) - 1) / (exp(2 * v->data) + 1);
-    return newValue(t, "tanh", previous, label, 0.0);
+    return newValue(t, "tanh", previous, label, 0.0, true);
 }
 
 Value *euler(Value *v, char *label) {
     Value **previous = createValuePointerArray(v, NULL);
     float e = exp(v->data);
-    return newValue(e, "exp", previous, label, 0.0);
+    return newValue(e, "exp", previous, label, 0.0, true);
 }
 
 Value *pow2(Value *v, char *label) {
     Value **previous = createValuePointerArray(v, NULL);
     float p = pow(v->data, 2);
-    return newValue(p, "pow2", previous, label, 0.0);
+    return newValue(p, "pow2", previous, label, 0.0, true);
 }
 
 
 void _backward(Value *v) {
     if (v->operation == NULL) {
+        // no grad to compute
+        return;
+    }
+    if (v->requires_grad == false) {
         // no grad to compute
         return;
     }
@@ -125,30 +154,43 @@ void displayValue(Value *v) {
     printf("%s Value(data=%.2f, previous=(%.2f, %.2f), operation=%s, grad=%.2f)\n", v->label, v->data, previous1, previous2, v->operation, v->grad);
 }
 
+Value *forward_neuron(Neuron *n) {
+    Value **prods = malloc(n->nin * sizeof(Value*));
+    for (int i = 0; i < n->nin; i++) {
+        char *label = malloc(10 * sizeof(char));
+        sprintf(label, "x*w[%d]", i);
+        prods[i] = mul(n->inputs[i], n->weights[i], label);
+    }
+
+    Value *sum_prods = prods[0]; // start with the first product
+    for (int i = 1; i < n->nin; i++) {
+        char *label = malloc(10 * sizeof(char));
+        sprintf(label, "sum[%d]", i);
+        sum_prods = sum(sum_prods, prods[i], label); // sum up the products
+    }
+    Value *out = htan(sum_prods, "tanh");
+
+    for (int i = 0; i < n->nin; i++) {
+        free(prods[i]->label);
+        free(prods[i]);
+    }
+    free(prods);
+
+    return out;
+}
+
 int main() {
-    Value *w = newValue(-3.0, NULL, NULL, "w", 0.0);
-    Value *v = newValue(0.5, NULL, NULL, "v", 0.0);
-    Value *z = newValue(4.0, NULL, NULL, "z", 0.0);
-
-    Value *s = sum(z, w, "sum");
-    Value *p = mul(v, s, "prod");
-    Value *Loss = htan(p, "Loss");
-
-    Loss->grad = 1.0;
-    _backward(Loss);
-    displayValue(Loss);
-    displayValue(p);
-    displayValue(s);
-    displayValue(w);
-    displayValue(v);
-    displayValue(z);
-
-    free(w);
-    free(v);
-    free(z);
-    free(s);
-    free(p);
-    free(Loss);
-
+    float *array = malloc(3 * sizeof(float));
+    array[0] = 1.0;
+    array[1] = -2.0;
+    array[2] = 3.0;
+    Neuron *n = createNeuron(3, array);
+    Value *out = forward_neuron(n);
+    displayValue(out);
+    out->grad = 1.0;
+    _backward(out);
+    displayValue(out);
+    displayValue(out->previous[0]);
+    free(n);
     return 0;
 }
