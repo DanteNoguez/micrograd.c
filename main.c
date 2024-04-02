@@ -23,7 +23,10 @@ typedef struct Neuron {
 
 typedef struct Layer {
     struct Neuron **neurons;
+    int nout;
 } Layer;
+
+bool DEBUG = false;
 
 // Constructor for Value
 Value *newValue(float data, char *operation, struct Value **previous, char *label, float grad, bool requires_grad) {
@@ -56,7 +59,6 @@ Value **createValuePointerArray(Value *v1, Value *v2) {
 }
 
 float random_uniform(float min, float max) {
-    srand((unsigned int)time(NULL));
     float normalized = rand() / (float)RAND_MAX;
     float range = max - min;
     float random = (normalized * range) + min; 
@@ -72,8 +74,14 @@ Neuron *createNeuron(int nin, float *x) {
         char *label = malloc(10 * sizeof(char)); // we're assuming up to four digit number of weights
         sprintf(label, "weight[%d]", i);
         weights[i] = newValue(random_uniform(-1, 1), NULL, NULL, label, 0.0, true);
+        if (DEBUG == true) {
+            printf("Neuron Weight[%d] = %f\n", i, weights[i]->data);
+        }
     }
     bias = newValue(random_uniform(-1, 1), NULL, NULL, "bias", 0.0, true);
+    if (DEBUG == true) {
+        printf("Neuron Bias = %f\n", bias->data);
+    }
     Neuron *neuron = malloc(sizeof(Neuron));
     neuron->bias = bias;
     neuron->weights = weights;
@@ -179,18 +187,40 @@ Value *forward_neuron(Neuron *n) {
     return out;
 }
 
+Layer *createLayer(int nin, int nout, float *x) {
+    Layer *layer = malloc(sizeof(Layer));
+    Neuron **neurons = malloc(nout * sizeof(Neuron*));
+    for (int i = 0; i < nout; i++) {
+        neurons[i] = createNeuron(nin, x);
+    }
+    layer->neurons = neurons;
+    layer->nout = nout;
+    return layer;
+}
+
+Value **forward_layer(Layer *layer) {
+    Value **outputs = malloc(layer->nout * sizeof(Value*));
+    for (int i = 0; i < layer->nout; i++) {
+        outputs[i] = forward_neuron(layer->neurons[i]);
+    }
+    return outputs;
+}
+
 int main() {
+    srand((unsigned int)time(NULL));
     float *array = malloc(3 * sizeof(float));
     array[0] = 1.0;
     array[1] = -2.0;
     array[2] = 3.0;
-    Neuron *n = createNeuron(3, array);
-    Value *out = forward_neuron(n);
-    displayValue(out);
-    out->grad = 1.0;
-    _backward(out);
-    displayValue(out);
-    displayValue(out->previous[0]);
-    free(n);
+    Layer *layer = createLayer(3, 2, array);
+    Value **out = forward_layer(layer);
+    out[0]->grad = 1.0;
+    out[1]->grad = 1.0;
+    _backward(out[0]);
+    _backward(out[1]);
+    displayValue(out[0]);
+    displayValue(out[1]);
+    free(layer);
+    free(out);
     return 0;
 }
