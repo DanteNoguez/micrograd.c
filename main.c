@@ -30,7 +30,7 @@ typedef struct MLP {
     int nouts_size;
 } MLP;
 
-bool DEBUG = true;
+bool DEBUG = false;
 
 // Constructor for Value
 Value *newValue(float data, char *operation, struct Value **previous, char *label, float grad, bool requires_grad) {
@@ -250,6 +250,20 @@ void freeMLP(MLP *mlp) {
     free(mlp);
 }
 
+void stepMLP(MLP *mlp) {
+    float learning_rate = -0.01;
+    for (int i = 0; i < mlp->nouts_size; i++) {
+        Layer *layer = mlp->layers[i];
+        for (int j = 0; j < layer->nout; j++) {
+            Neuron *neuron = layer->neurons[j];
+            for (int k = 0; k < neuron->nin; k++) {
+                neuron->weights[k]->data += learning_rate * neuron->weights[k]->grad;
+            }
+            neuron->bias->data += learning_rate * neuron->bias->grad;
+        }
+    }
+}
+
 int main() {
     srand((unsigned int)time(NULL));
     // DATASET
@@ -286,6 +300,9 @@ int main() {
         displayValue(out[i]);
         printf("TARGET VALUE IS: %.2f\n", *targets[i]);
         printf("LOSS: %.2f\n", pow(out[i]->data - *targets[i], 2));
+        stepMLP(mlp);
+        out = forwardMLP(mlp, data, 6);
+        printf("LOSS AFTER STEP: %.2f\n", pow(out[i]->data - *targets[i], 2));
     }
     freeMLP(mlp);
     return 0;
