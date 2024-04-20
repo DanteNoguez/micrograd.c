@@ -17,7 +17,6 @@ typedef struct Value {
 typedef struct Neuron {
     struct Value **weights;
     struct Value *bias;
-    struct Value **inputs;
     int nin;
 } Neuron;
 
@@ -70,15 +69,10 @@ float random_uniform(float min, float max) {
     return random;
 }
 
-Neuron *createNeuron(int nin, float *x) {
+Neuron *createNeuron(int nin) {
     Value **weights = malloc(nin * sizeof(Value*));
     Value *bias = malloc(sizeof(Value));
-    Value **inputs = malloc(nin * sizeof(Value*));
     for (int i = 0; i < nin; i++) {
-        if (DEBUG == true) {
-            printf("Input [%d] = %f\n", i, x[i]);
-        }
-        inputs[i] = newValue(x[i], NULL, NULL, NULL, 0.0, false);
         char *label = malloc(10 * sizeof(char)); // we're assuming up to four digit number of weights
         sprintf(label, "weight[%d]", i);
         weights[i] = newValue(random_uniform(-1, 1), NULL, NULL, label, 0.0, true);
@@ -93,7 +87,6 @@ Neuron *createNeuron(int nin, float *x) {
     Neuron *neuron = malloc(sizeof(Neuron));
     neuron->bias = bias;
     neuron->weights = weights;
-    neuron->inputs = inputs;
     neuron->nin = nin;
     return neuron;
 }
@@ -170,12 +163,15 @@ void displayValue(Value *v) {
     printf("%s Value(data=%.2f, previous=(%.2f, %.2f), operation=%s, grad=%.2f)\n", v->label, v->data, previous1, previous2, v->operation, v->grad);
 }
 
-Value *forward_neuron(Neuron *n) {
+Value *forward_neuron(Neuron *n, Value **x) {
     Value **prods = malloc(n->nin * sizeof(Value*));
     for (int i = 0; i < n->nin; i++) {
         char *label = malloc(10 * sizeof(char));
         sprintf(label, "x*w[%d]", i);
-        prods[i] = mul(n->inputs[i], n->weights[i], label);
+        if (DEBUG == true) {
+            printf("Multiplying input %s with weight %s\n", x[i]->label, n->weights[i]->label);
+        }
+        prods[i] = mul(x[i], n->weights[i], label);
     }
 
     Value *sum_prods = prods[0]; // start with the first product
@@ -185,40 +181,33 @@ Value *forward_neuron(Neuron *n) {
         sum_prods = sum(sum_prods, prods[i], label); // sum up the products
     }
     Value *out = htan(sum_prods, "tanh");
-
-    for (int i = 0; i < n->nin; i++) {
-        free(prods[i]->label);
-        free(prods[i]);
-    }
-    free(prods);
-
     return out;
 }
 
-Layer *createLayer(int nin, int nout, float *x) {
+Layer *createLayer(int nin, int nout) {
     Layer *layer = malloc(sizeof(Layer));
     Neuron **neurons = malloc(nout * sizeof(Neuron*));
     for (int i = 0; i < nout; i++) {
-        neurons[i] = createNeuron(nin, x);
+        neurons[i] = createNeuron(nin);
     }
     layer->neurons = neurons;
     layer->nout = nout;
     return layer;
 }
 
-Value **forward_layer(Layer *layer) {
+Value **forward_layer(Layer *layer, Value **x) {
     Value **outputs = malloc(layer->nout * sizeof(Value*));
     for (int i = 0; i < layer->nout; i++) {
-        outputs[i] = forward_neuron(layer->neurons[i]);
+        outputs[i] = forward_neuron(layer->neurons[i], x);
     }
     return outputs;
 }
 
-MLP *createMLP(int nin, int *nouts, int nouts_size, float *x) {
+MLP *createMLP(int nin, int *nouts, int nouts_size) {
     Layer **layers = malloc(nouts_size * sizeof(Layer*));
     for (int i = 0; i < nouts_size; i++) {
         int layer_nin = (i == 0) ? nin : nouts[i-1];
-        layers[i] = createLayer(layer_nin, nouts[i], x);
+        layers[i] = createLayer(layer_nin, nouts[i]);
     }
     MLP *mlp = malloc(sizeof(MLP));
     mlp->layers = layers;
@@ -226,36 +215,78 @@ MLP *createMLP(int nin, int *nouts, int nouts_size, float *x) {
     return mlp;
 }
 
-Value ***forward_MLP(MLP *mlp) {
-    Value ***outputs = malloc(mlp->nouts_size * sizeof(Value**));
-    for (int i = 0; i < mlp->nouts_size; i++) {
-        outputs[i] = forward_layer(mlp->layers[i]);
+Value **forward_MLP(MLP *mlp, Value **x, int input_size) {
+    Value **outputs = malloc(input_size * sizeof(Value*));
+    for (int i = 0; i < input_size; i++) {
+        Value **input = &x[i];
+        Value **layer_outputs = input;
+        for (int j = 0; j < mlp->nouts_size; j++) {
+            if (DEBUG == true) {
+            printf("Forwarding layer %d for input %d\n", j, i);
+            }
+            layer_outputs = forward_layer(mlp->layers[j], layer_outputs);
+        }
+        outputs[i] = layer_outputs[0];
     }
     return outputs;
 }
 
+void freeMLP(MLP *mlp) {
+    for (int i = 0; i < mlp->nouts_size; i++) {
+        Layer *layer = mlp->layers[i];
+        for (int j = 0; j < layer->nout; j++) {
+            Neuron *neuron = layer->neurons[j];
+            for (int k = 0; k < neuron->nin; k++) {
+                free(neuron->weights[k]);
+            }
+            free(neuron->weights);
+            free(neuron->bias);
+            free(neuron);
+        }
+        free(layer->neurons);
+        free(layer);
+    }
+    free(mlp->layers);
+    free(mlp);
+}
+
 int main() {
     srand((unsigned int)time(NULL));
-    float *data = malloc(3 * sizeof(float));
-    data[0] = 1.0;
-    data[1] = -2.0;
-    data[2] = 3.0;
-    int *nouts = malloc(3 * sizeof(float));
+    // DATASET
+    Value **data = malloc(6 * sizeof(Value*));
+    data[0] = newValue(1.0, NULL, NULL, "one", 0.0, false);
+    data[1] = newValue(2.0, NULL, NULL, "two", 0.0, false);
+    data[2] = newValue(3.0, NULL, NULL, "three", 0.0, false);
+    data[3] = newValue(4.0, NULL, NULL, "four", 0.0, false);
+    data[4] = newValue(5.0, NULL, NULL, "five", 0.0, false);
+    data[5] = newValue(6.0, NULL, NULL, "six", 0.0, false);
+    // TARGETS
+    float **targets = malloc(6 * sizeof(float*));
+    for(int i = 0; i < 6; i++) {
+    targets[i] = malloc(sizeof(float));
+    }
+    *targets[0] = -1.0;
+    *targets[1] = 1.0;
+    *targets[2] = -1.0;
+    *targets[3] = 1.0;
+    *targets[4] = -1.0;
+    *targets[5] = 1.0;
+    // NUMBER OF OUTPUTS PER LAYER
+    int *nouts = malloc(3 * sizeof(int));
     nouts[0] = 4;
     nouts[1] = 4;
     nouts[2] = 1;
-    MLP *mlp = createMLP(3, nouts, 3, data);
-    Value ***out = forward_MLP(mlp);
-    displayValue(out[0][0]);
-    out[0][0]->grad = 1.0;
-    _backward(out[0][0]);
-    displayValue(out[0][0]);
-    for (int i = 0; i < mlp->nouts_size; i++) {
-        free(out[i]);
+
+    // FORWARD MLP ON EACH X
+    MLP *mlp = createMLP(1, nouts, 3);
+    Value **out = forward_MLP(mlp, data, 6);
+    for (int i = 0; i < 6; i++) {
+        out[i]->grad = 1.0;
+        _backward(out[i]);
+        displayValue(out[i]);
+        printf("TARGET VALUE IS: %.2f\n", *targets[i]);
+        printf("LOSS: %.2f\n", pow(out[i]->data - *targets[i], 2));
     }
-    free(out);
-    free(mlp->layers);
-    free(mlp);
-    free(data);
+    freeMLP(mlp);
     return 0;
 }
