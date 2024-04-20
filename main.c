@@ -163,7 +163,7 @@ void displayValue(Value *v) {
     printf("%s Value(data=%.2f, previous=(%.2f, %.2f), operation=%s, grad=%.2f)\n", v->label, v->data, previous1, previous2, v->operation, v->grad);
 }
 
-Value *forward_neuron(Neuron *n, Value **x) {
+Value *forwardNeuron(Neuron *n, Value **x) {
     Value **prods = malloc(n->nin * sizeof(Value*));
     for (int i = 0; i < n->nin; i++) {
         char *label = malloc(10 * sizeof(char));
@@ -195,10 +195,10 @@ Layer *createLayer(int nin, int nout) {
     return layer;
 }
 
-Value **forward_layer(Layer *layer, Value **x) {
+Value **forwardLayer(Layer *layer, Value **x) {
     Value **outputs = malloc(layer->nout * sizeof(Value*));
     for (int i = 0; i < layer->nout; i++) {
-        outputs[i] = forward_neuron(layer->neurons[i], x);
+        outputs[i] = forwardNeuron(layer->neurons[i], x);
     }
     return outputs;
 }
@@ -215,7 +215,7 @@ MLP *createMLP(int nin, int *nouts, int nouts_size) {
     return mlp;
 }
 
-Value **forward_MLP(MLP *mlp, Value **x, int input_size) {
+Value **forwardMLP(MLP *mlp, Value **x, int input_size) {
     Value **outputs = malloc(input_size * sizeof(Value*));
     for (int i = 0; i < input_size; i++) {
         Value **input = &x[i];
@@ -224,7 +224,7 @@ Value **forward_MLP(MLP *mlp, Value **x, int input_size) {
             if (DEBUG == true) {
             printf("Forwarding layer %d for input %d\n", j, i);
             }
-            layer_outputs = forward_layer(mlp->layers[j], layer_outputs);
+            layer_outputs = forwardLayer(mlp->layers[j], layer_outputs);
         }
         outputs[i] = layer_outputs[0];
     }
@@ -279,7 +279,7 @@ int main() {
 
     // FORWARD MLP ON EACH X
     MLP *mlp = createMLP(1, nouts, 3);
-    Value **out = forward_MLP(mlp, data, 6);
+    Value **out = forwardMLP(mlp, data, 6);
     for (int i = 0; i < 6; i++) {
         out[i]->grad = 1.0;
         _backward(out[i]);
