@@ -5,6 +5,8 @@
 #include <time.h>
 #include <stdbool.h>
 
+#define MAX(x, y) (((x) > (y)) ? (x) : (y))
+
 typedef struct Value {
     float data;
     char *operation;
@@ -112,8 +114,6 @@ Value *sigmoid(Value *v, char *label) {
     float sigma = 1.0 / (1 + exp(-v->data));
     return newValue(sigma, "sigmoid", previous, label, 0.0, true);
 }
-
-#define MAX(x, y) (((x) > (y)) ? (x) : (y))
 
 Value *ReLU(Value *v, char *label) {
     Value **previous = createValuePointerArray(v, NULL);
