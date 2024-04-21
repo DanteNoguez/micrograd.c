@@ -202,7 +202,7 @@ Value *forwardNeuron(Neuron *n, Value **x) {
         sprintf(label, "sum[%d]", i);
         sum_prods = sum(sum_prods, prods[i], label); // sum up the products
     }
-    Value *out = sigmoid(sum_prods, "sigmoid");
+    Value *out = htan(sum_prods, "tanh");
     return out;
 }
 
@@ -299,6 +299,12 @@ void zeroGrad(MLP *mlp) {
     }
 }
 
+Value *squared_error_loss(Value *prediction, Value *target) {
+    Value *error = sum(prediction, target, "error");
+    Value *squared_error = pow2(error, "squared error");
+    return squared_error;
+}
+
 int main() {
     srand((unsigned int)time(NULL));
     // DATASET
@@ -330,16 +336,23 @@ int main() {
     MLP *mlp = createMLP(1, nouts, 3);
     Value **out = malloc(6 * sizeof(Value*));
     for (int k = 0; k < 100; k++) {
+        Value **losses = malloc(6 * sizeof(Value*));
         out = forwardMLP(mlp, data, 6); // forward pass
         for (int i = 0; i < 6; i++) {
+            Value *target_value = newValue(-*targets[i], NULL, NULL, "target", 0.0, false);
+            Value *loss = squared_error_loss(out[i], target_value);
+            losses[i] = loss;
             zeroGrad(mlp); // backward pass
-            out[i]->grad = 1.0;
-            _backward(out[i]);
-            displayValue(out[i]);
+            losses[i]->grad = 1.0;
+            _backward(losses[i]);
             stepMLP(mlp); // update
-            printf("TARGET VALUE IS: %.2f\n", *targets[i]);
-            printf("%.d LOSS: %.2f\n", k, pow(out[i]->data - *targets[i], 2));
+            printf("OUTPUT: ");
+            displayValue(out[i]);
+            printf("TARGET: ");
+            displayValue(target_value);
+            printf("%d LOSS: %.2f\n", k, loss->data);
         }
+        free(losses);
     }
     freeMLP(mlp);
     return 0;
