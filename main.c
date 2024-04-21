@@ -62,7 +62,7 @@ Value **createValuePointerArray(Value *v1, Value *v2) {
     return array;
 }
 
-float random_uniform(float min, float max) {
+float randomUniform(float min, float max) {
     float normalized = rand() / (float)RAND_MAX;
     float range = max - min;
     float random = (normalized * range) + min; 
@@ -75,12 +75,12 @@ Neuron *createNeuron(int nin) {
     for (int i = 0; i < nin; i++) {
         char *label = malloc(10 * sizeof(char)); // we're assuming up to four digit number of weights
         sprintf(label, "weight[%d]", i);
-        weights[i] = newValue(random_uniform(-1, 1), NULL, NULL, label, 0.0, true);
+        weights[i] = newValue(randomUniform(-0.1, 0.1), NULL, NULL, label, 0.0, true);
         if (DEBUG == true) {
             printf("Neuron Weight[%d] = %f\n", i, weights[i]->data);
         }
     }
-    bias = newValue(random_uniform(-1, 1), NULL, NULL, "bias", 0.0, true);
+    bias = newValue(randomUniform(-0.1, 0.1), NULL, NULL, "bias", 0.0, true);
     if (DEBUG == true) {
         printf("Neuron Bias = %f\n", bias->data);
     }
@@ -105,6 +105,20 @@ Value *htan(Value *v, char *label) {
     Value **previous = createValuePointerArray(v, NULL);
     float t = (exp(2 * v->data) - 1) / (exp(2 * v->data) + 1);
     return newValue(t, "tanh", previous, label, 0.0, true);
+}
+
+Value *sigmoid(Value *v, char *label) {
+    Value **previous = createValuePointerArray(v, NULL);
+    float sigma = 1.0 / (1 + exp(-v->data));
+    return newValue(sigma, "sigmoid", previous, label, 0.0, true);
+}
+
+#define MAX(x, y) (((x) > (y)) ? (x) : (y))
+
+Value *ReLU(Value *v, char *label) {
+    Value **previous = createValuePointerArray(v, NULL);
+    float relu = MAX(0, v->data);
+    return newValue(relu, "relu", previous, label, 0.0, true);
 }
 
 Value *euler(Value *v, char *label) {
@@ -147,6 +161,14 @@ void _backward(Value *v) {
         v->previous[0]->grad += (1 - pow(v->data, 2)) * v->grad;
         _backward(v->previous[0]);
     }
+    else if (strcmp(v->operation, "sigmoid") == 0) {
+        v->previous[0]->grad += v->data * (1 - v->data) * v->grad;
+        _backward(v->previous[0]);
+    }
+    else if (strcmp(v->operation, "relu") == 0) {
+        v->previous[0]->grad += (v->data > 0) ? 1 : 0 * v->grad;
+        _backward(v->previous[0]);
+    }
     else if (strcmp(v->operation, "exp") == 0) {
         v->previous[0]->grad += v->data * v->grad;
         _backward(v->previous[0]);
@@ -180,7 +202,7 @@ Value *forwardNeuron(Neuron *n, Value **x) {
         sprintf(label, "sum[%d]", i);
         sum_prods = sum(sum_prods, prods[i], label); // sum up the products
     }
-    Value *out = htan(sum_prods, "tanh");
+    Value *out = sigmoid(sum_prods, "sigmoid");
     return out;
 }
 
@@ -264,6 +286,19 @@ void stepMLP(MLP *mlp) {
     }
 }
 
+void zeroGrad(MLP *mlp) {
+    for (int i = 0; i < mlp->nouts_size; i++) {
+        Layer *layer = mlp->layers[i];
+        for (int j = 0; j < layer->nout; j++) {
+            Neuron *neuron = layer->neurons[j];
+            for (int k = 0; k < neuron->nin; k++) {
+                neuron->weights[k]->grad = 0.0;
+            }
+            neuron->bias->grad = 0.0;
+        }
+    }
+}
+
 int main() {
     srand((unsigned int)time(NULL));
     // DATASET
@@ -291,18 +326,20 @@ int main() {
     nouts[1] = 4;
     nouts[2] = 1;
 
-    // FORWARD MLP ON EACH X
+    // TRAIN THE NETWORK
     MLP *mlp = createMLP(1, nouts, 3);
-    Value **out = forwardMLP(mlp, data, 6);
-    for (int i = 0; i < 6; i++) {
-        out[i]->grad = 1.0;
-        _backward(out[i]);
-        displayValue(out[i]);
-        printf("TARGET VALUE IS: %.2f\n", *targets[i]);
-        printf("LOSS: %.2f\n", pow(out[i]->data - *targets[i], 2));
-        stepMLP(mlp);
-        out = forwardMLP(mlp, data, 6);
-        printf("LOSS AFTER STEP: %.2f\n", pow(out[i]->data - *targets[i], 2));
+    Value **out = malloc(6 * sizeof(Value*));
+    for (int k = 0; k < 100; k++) {
+        out = forwardMLP(mlp, data, 6); // forward pass
+        for (int i = 0; i < 6; i++) {
+            zeroGrad(mlp); // backward pass
+            out[i]->grad = 1.0;
+            _backward(out[i]);
+            displayValue(out[i]);
+            stepMLP(mlp); // update
+            printf("TARGET VALUE IS: %.2f\n", *targets[i]);
+            printf("%.d LOSS: %.2f\n", k, pow(out[i]->data - *targets[i], 2));
+        }
     }
     freeMLP(mlp);
     return 0;

@@ -5,7 +5,7 @@ WIP: A C implementation of Karpathy's [micrograd](https://github.com/karpathy/mi
 ## todos
 - [x] add layers
 - [x] add MLP
-- [ ] loss fn & gradient descent optimization
-- [ ] add more non-linear fns
+- [x] loss fn & gradient descent optimization
+- [x] add more non-linear fns
 - [ ] add graph fns
 - [ ] generalize pow fn
