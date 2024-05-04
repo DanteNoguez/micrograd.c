@@ -173,7 +173,7 @@ void _backward(Value *v) {
         _backward(v->previous[0]);
     }
     else if (strcmp(v->operation, "pow2") == 0) {
-        v->previous[0]->grad += (2 * v->data) * v->grad;
+        v->previous[0]->grad += (2 * v->previous[0]->data) * v->grad;
         _backward(v->previous[0]);
     }
 }
@@ -208,7 +208,7 @@ Value *forwardNeuron(Neuron *n, Value **x, int input_size) {
         Value *prod = mul(x[i], n->weights[i], label);
         sum_prods = sum(sum_prods, prod, "sum_prods");
     }
-    Value *out = LeakyReLU(sum(sum_prods, n->bias, "sum_bias"), "leaky");
+    Value *out = htan(sum(sum_prods, n->bias, "sum_bias"), "tanh");
     return out;
 }
 
