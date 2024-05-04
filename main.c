@@ -161,11 +161,11 @@ void _backward(Value *v) {
         _backward(v->previous[0]);
     }
     else if (strcmp(v->operation, "leaky") == 0) {
-        v->previous[0]->grad += (v->data > 0) ? 1 * v->grad : 0.01 * v->grad;
+        v->previous[0]->grad += (v->previous[0]->data > 0) ? 1 * v->grad : 0.01 * v->grad;
         _backward(v->previous[0]);
     }
     else if (strcmp(v->operation, "relu") == 0) {
-        v->previous[0]->grad += (v->data > 0) ? 1 * v->grad : 0 * v->grad;
+        v->previous[0]->grad += (v->previous[0]->data > 0) ? 1 * v->grad : 0 * v->grad;
         _backward(v->previous[0]);
     }
     else if (strcmp(v->operation, "exp") == 0) {
@@ -180,7 +180,7 @@ void _backward(Value *v) {
 
 Neuron *createNeuron(int nin) {
     Value **weights = malloc(nin * sizeof(Value*));
-    Value *bias = malloc(sizeof(Value));
+    Value *bias = malloc(sizeof(Value*));
     for (int i = 0; i < nin; i++) {
         char *label = malloc(10 * sizeof(char)); // we're assuming up to four digit number of weights
         sprintf(label, "weight[%d]", i);
@@ -208,7 +208,7 @@ Value *forwardNeuron(Neuron *n, Value **x, int input_size) {
         Value *prod = mul(x[i], n->weights[i], label);
         sum_prods = sum(sum_prods, prod, "sum_prods");
     }
-    Value *out = htan(sum(sum_prods, n->bias, "sum_bias"), "tanh");
+    Value *out = LeakyReLU(sum(sum_prods, n->bias, "sum_bias"), "leaky");
     return out;
 }
 
@@ -276,7 +276,7 @@ void freeMLP(MLP *mlp) {
 }
 
 void stepMLP(MLP *mlp) {
-    float learning_rate = 0.05;
+    float learning_rate = 0.01;
     for (int i = 0; i < mlp->n_layers; i++) {
         Layer *layer = mlp->layers[i];
         for (int j = 0; j < layer->nout; j++) {
@@ -330,26 +330,30 @@ int main() {
     int num_features = 3;
     int num_data_points = 4;
     Value ***data = malloc(num_data_points * sizeof(Value**));
+    float predefined_values[4][3] = {
+        {2, 3, -1},
+        {3, -1, 0.5},
+        {0.5, 1, 1},
+        {1, 1, -1}
+    };
+
     for (int i = 0; i < num_data_points; i++) {
         data[i] = malloc(num_features * sizeof(Value*));
         for (int j = 0; j < num_features; j++) {
             char *label = malloc(20 * sizeof(char));
             sprintf(label, "data[%d][%d]", i, j);
-            data[i][j] = newValue(randomUniform(-5.0, 5.0), NULL, NULL, label, 0.0, false);
+            data[i][j] = newValue(predefined_values[i][j], NULL, NULL, label, 0.0, false);
             if (DEBUG == true) {
                 printf("creating data point %f with label %s\n", data[i][j]->data, label);
             }
         }
     }
     // TARGETS
-    float **targets = malloc(4 * sizeof(float*));
-    for(int i = 0; i < 4; i++) {
-    targets[i] = malloc(sizeof(float));
-    }
-    *targets[0] = -1.0;
-    *targets[1] = 1.0;
-    *targets[2] = -1.0;
-    *targets[3] = 1.0;
+    float *targets = malloc(4 * sizeof(float));
+    targets[0] = -1.0;
+    targets[1] = 1.0;
+    targets[2] = -1.0;
+    targets[3] = 1.0;
     // NUMBER OF OUTPUTS PER LAYER
     int *nouts = malloc(3 * sizeof(int));
     nouts[0] = 4;
@@ -367,7 +371,11 @@ int main() {
             Value **output = forwardMLP(mlp, data[i], 1);
 
             // Compute loss
-            Value *target = newValue(*targets[i], NULL, NULL, "target", 0.0, false);
+            Value *target = newValue(targets[i], NULL, NULL, "target", 0.0, false);
+            if (DEBUG == true) {
+                displayValue(*output);
+                displayValue(target);
+            }
             Value *loss = squared_error_loss(*output, target);
             epoch_losses[i] = loss;
 
