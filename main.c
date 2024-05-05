@@ -310,7 +310,7 @@ void zeroGrad(MLP *mlp) {
 
 Value *squared_error_loss(Value *prediction, Value *target) {
     Value *error = sum(prediction, mul(target, newValue(-1.0, NULL, NULL, "neg_target", 0.0, false), "neg_target"), "error");
-    Value *squared_error = mul(pow2(error, "squared_error"), newValue(0.5, NULL, NULL, "half", 0.0, false), "half_squared_error");
+    Value *squared_error = pow2(error, "squared_error");
     return squared_error;
 }
 
