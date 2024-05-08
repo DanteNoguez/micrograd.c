@@ -32,7 +32,7 @@ typedef struct MLP {
     int n_layers;
 } MLP;
 
-bool DEBUG = false;
+bool DEBUG = true;
 
 // Constructor for Value
 Value *newValue(float data, char *operation, struct Value **previous, char *label, float grad, bool requires_grad) {
@@ -201,7 +201,7 @@ Neuron *createNeuron(int nin) {
 }
 
 Value *forwardNeuron(Neuron *n, Value **x, int input_size) {
-    Value *sum_prods = newValue(0.0, NULL, NULL, "sum_prods", 0.0, false);
+    Value *sum_prods = newValue(0.0, NULL, NULL, "sum_prods", 0.0, true);
     for (int i = 0; i < input_size; i++) {
         char *label = malloc(10 * sizeof(char));
         sprintf(label, "x*w[%d]", i);
@@ -228,7 +228,7 @@ Value **forwardLayer(Layer *layer, Value **x, int input_size) {
     for (int i = 0; i < layer->nout; i++) {
         outputs[i] = forwardNeuron(layer->neurons[i], x, input_size);
     }
-    return outputs;
+    return outputs; 
 }
 
 MLP *createMLP(int nin, int *nouts, int n_layers) {
@@ -247,9 +247,6 @@ Value **forwardMLP(MLP *mlp, Value **x, int input_size) {
     Value **layer_outputs = x;
     int layer_input_size = input_size;
     for (int i = 0; i < mlp->n_layers; i++) {
-        // if (DEBUG == true) {
-        //     printf("Forwarding layer %d\n", i);
-        // }
         layer_outputs = forwardLayer(mlp->layers[i], layer_outputs, layer_input_size);
         layer_input_size = mlp->layers[i]->nout;
     }
@@ -323,18 +320,89 @@ Value *average_losses(Value **losses, int count) {
     return avg_loss;
 }
 
+void generate_dot(MLP* mlp, Value** input_data, int input_size, Value* prediction, Value* loss) {
+    FILE* file = fopen("graph.dot", "w");
+    if (file == NULL) {
+        printf("Error opening file!\n");
+        exit(1);
+    }
+
+    fprintf(file, "digraph G {\n");
+    fprintf(file, "  rankdir=LR;\n");
+    fprintf(file, "  node [shape=record];\n");
+
+    // Create input nodes
+    fprintf(file, "  subgraph cluster_input {\n");
+    fprintf(file, "    label=\"Input Layer\";\n");
+    for (int i = 0; i < input_size; i++) {
+        fprintf(file, "    input%d [label=\"{<f0> |valor %.4f|grad %.4f}\"];\n", i, input_data[i]->data, input_data[i]->grad);
+    }
+    fprintf(file, "  }\n");
+
+    // Loop over hidden layers in the MLP
+    for (int i = 0; i < mlp->n_layers - 1; i++) {
+        Layer* layer = mlp->layers[i];
+
+        fprintf(file, "  subgraph cluster_hidden%d {\n", i);
+        fprintf(file, "    label=\"Hidden Layer %d\";\n", i);
+
+        // Loop over neurons in the layer
+        for (int j = 0; j < layer->nout; j++) {
+            Neuron* neuron = layer->neurons[j];
+
+            // Create a node for the neuron
+            fprintf(file, "    hidden%d_%d [label=\"{<f0> |valor %.4f|grad %.4f}\"];\n", i, j, neuron->bias->data, neuron->bias->grad);
+
+            // Create nodes and edges for weights
+            for (int k = 0; k < neuron->nin; k++) {
+                fprintf(file, "    weight%d_%d_%d [label=\"{<f0> |valor %.4f|grad %.4f}\"];\n", i, j, k, neuron->weights[k]->data, neuron->weights[k]->grad);
+                if (i == 0) {
+                    fprintf(file, "    input%d -> weight%d_%d_%d;\n", k, i, j, k);
+                } else {
+                    fprintf(file, "    hidden%d_%d -> weight%d_%d_%d;\n", i-1, k, i, j, k);
+                }
+                fprintf(file, "    weight%d_%d_%d -> hidden%d_%d;\n", i, j, k, i, j);
+            }
+        }
+
+        fprintf(file, "  }\n");
+    }
+
+    // Create output node
+    fprintf(file, "  subgraph cluster_output {\n");
+    fprintf(file, "    label=\"Output Layer\";\n");
+    Layer* output_layer = mlp->layers[mlp->n_layers - 1];
+    Neuron* output_neuron = output_layer->neurons[0];
+    fprintf(file, "    output [label=\"{<f0> |valor %.4f|grad %.4f}\"];\n", output_neuron->bias->data, output_neuron->bias->grad);
+    for (int i = 0; i < output_neuron->nin; i++) {
+        fprintf(file, "    hidden%d_%d -> output;\n", mlp->n_layers - 2, i);
+    }
+    fprintf(file, "  }\n");
+
+    // Create prediction node
+    fprintf(file, "  prediction [label=\"{<f0> |prediction|valor %.4f|grad %.4f}\"];\n", prediction->data, prediction->grad);
+    fprintf(file, "  output -> prediction;\n");
+
+    // Create loss node
+    fprintf(file, "  loss [label=\"{<f0> |loss|valor %.4f|grad %.4f}\"];\n", loss->data, loss->grad);
+    fprintf(file, "  prediction -> loss;\n");
+
+    fprintf(file, "}\n");
+    fclose(file);
+}
+
 int main() {
     srand((unsigned int)time(NULL));
     // DATA
     // 4 data points, each containing an array of 3 Values
     int num_features = 3;
-    int num_data_points = 4;
+    int num_data_points = 1;
     Value ***data = malloc(num_data_points * sizeof(Value**));
-    float predefined_values[4][3] = {
+    float predefined_values[1][3] = {
         {2, 3, -1},
-        {3, -1, 0.5},
-        {0.5, 1, 1},
-        {1, 1, -1}
+        // {3, -1, 0.5},
+        // {0.5, 1, 1},
+        // {1, 1, -1}
     };
 
     for (int i = 0; i < num_data_points; i++) {
@@ -349,11 +417,11 @@ int main() {
         }
     }
     // TARGETS
-    float *targets = malloc(4 * sizeof(float));
+    float *targets = malloc(1 * sizeof(float));
     targets[0] = -1.0;
-    targets[1] = 1.0;
-    targets[2] = -1.0;
-    targets[3] = 1.0;
+    // targets[1] = 1.0;
+    // targets[2] = -1.0;
+    // targets[3] = 1.0;
     // NUMBER OF OUTPUTS PER LAYER
     int *nouts = malloc(3 * sizeof(int));
     nouts[0] = 4;
@@ -362,8 +430,8 @@ int main() {
 
     MLP *mlp = createMLP(3, nouts, 3);
     // TRAINING LOOP
-    int dataset_size = 4;
-    int num_epochs = 30;
+    int dataset_size = 1;
+    int num_epochs = 1;
     for (int epoch = 0; epoch < num_epochs; epoch++) {
         Value **epoch_losses = malloc(dataset_size * sizeof(Value*));
         for (int i = 0; i < dataset_size; i++) {
@@ -382,6 +450,7 @@ int main() {
             // Backward pass
             loss->grad = 1.0;
             _backward(loss);
+            generate_dot(mlp, data[0], num_features, *output, loss);
 
             // Update weights
             stepMLP(mlp);
@@ -400,6 +469,6 @@ int main() {
         free(epoch_losses);
         free(avg_loss);
     }
-    freeMLP(mlp);
+        freeMLP(mlp);
     return 0;
 }
