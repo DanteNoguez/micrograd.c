@@ -32,7 +32,7 @@ typedef struct MLP {
     int n_layers;
 } MLP;
 
-bool DEBUG = true;
+bool DEBUG = false;
 
 // Constructor for Value
 Value *newValue(float data, char *operation, struct Value **previous, char *label, float grad, bool requires_grad) {
@@ -335,7 +335,7 @@ void generate_dot(MLP* mlp, Value** input_data, int input_size, Value* predictio
     fprintf(file, "  subgraph cluster_input {\n");
     fprintf(file, "    label=\"Input Layer\";\n");
     for (int i = 0; i < input_size; i++) {
-        fprintf(file, "    input%d [label=\"{<f0> |valor %.4f|grad %.4f}\"];\n", i, input_data[i]->data, input_data[i]->grad);
+        fprintf(file, "    input%d [label=\"{<f0> |value %.4f|grad %.4f}\"];\n", i, input_data[i]->data, input_data[i]->grad);
     }
     fprintf(file, "  }\n");
 
@@ -351,11 +351,11 @@ void generate_dot(MLP* mlp, Value** input_data, int input_size, Value* predictio
             Neuron* neuron = layer->neurons[j];
 
             // Create a node for the neuron
-            fprintf(file, "    hidden%d_%d [label=\"{<f0> |valor %.4f|grad %.4f}\"];\n", i, j, neuron->bias->data, neuron->bias->grad);
+            fprintf(file, "    hidden%d_%d [label=\"{<f0> |value %.4f|grad %.4f}\"];\n", i, j, neuron->bias->data, neuron->bias->grad);
 
             // Create nodes and edges for weights
             for (int k = 0; k < neuron->nin; k++) {
-                fprintf(file, "    weight%d_%d_%d [label=\"{<f0> |valor %.4f|grad %.4f}\"];\n", i, j, k, neuron->weights[k]->data, neuron->weights[k]->grad);
+                fprintf(file, "    weight%d_%d_%d [label=\"{<f0> |value %.4f|grad %.4f}\"];\n", i, j, k, neuron->weights[k]->data, neuron->weights[k]->grad);
                 if (i == 0) {
                     fprintf(file, "    input%d -> weight%d_%d_%d;\n", k, i, j, k);
                 } else {
@@ -373,18 +373,18 @@ void generate_dot(MLP* mlp, Value** input_data, int input_size, Value* predictio
     fprintf(file, "    label=\"Output Layer\";\n");
     Layer* output_layer = mlp->layers[mlp->n_layers - 1];
     Neuron* output_neuron = output_layer->neurons[0];
-    fprintf(file, "    output [label=\"{<f0> |valor %.4f|grad %.4f}\"];\n", output_neuron->bias->data, output_neuron->bias->grad);
+    fprintf(file, "    output [label=\"{<f0> |value %.4f|grad %.4f}\"];\n", output_neuron->bias->data, output_neuron->bias->grad);
     for (int i = 0; i < output_neuron->nin; i++) {
         fprintf(file, "    hidden%d_%d -> output;\n", mlp->n_layers - 2, i);
     }
     fprintf(file, "  }\n");
 
     // Create prediction node
-    fprintf(file, "  prediction [label=\"{<f0> |prediction|valor %.4f|grad %.4f}\"];\n", prediction->data, prediction->grad);
+    fprintf(file, "  prediction [label=\"{<f0> |prediction|value %.4f|grad %.4f}\"];\n", prediction->data, prediction->grad);
     fprintf(file, "  output -> prediction;\n");
 
     // Create loss node
-    fprintf(file, "  loss [label=\"{<f0> |loss|valor %.4f|grad %.4f}\"];\n", loss->data, loss->grad);
+    fprintf(file, "  loss [label=\"{<f0> |loss|value %.4f|grad %.4f}\"];\n", loss->data, loss->grad);
     fprintf(file, "  prediction -> loss;\n");
 
     fprintf(file, "}\n");
@@ -396,13 +396,13 @@ int main() {
     // DATA
     // 4 data points, each containing an array of 3 Values
     int num_features = 3;
-    int num_data_points = 1;
+    int num_data_points = 4;
     Value ***data = malloc(num_data_points * sizeof(Value**));
-    float predefined_values[1][3] = {
+    float predefined_values[4][3] = {
         {2, 3, -1},
-        // {3, -1, 0.5},
-        // {0.5, 1, 1},
-        // {1, 1, -1}
+        {3, -1, 0.5},
+        {0.5, 1, 1},
+        {1, 1, -1}
     };
 
     for (int i = 0; i < num_data_points; i++) {
@@ -417,11 +417,11 @@ int main() {
         }
     }
     // TARGETS
-    float *targets = malloc(1 * sizeof(float));
+    float *targets = malloc(4 * sizeof(float));
     targets[0] = -1.0;
-    // targets[1] = 1.0;
-    // targets[2] = -1.0;
-    // targets[3] = 1.0;
+    targets[1] = 1.0;
+    targets[2] = -1.0;
+    targets[3] = 1.0;
     // NUMBER OF OUTPUTS PER LAYER
     int *nouts = malloc(3 * sizeof(int));
     nouts[0] = 4;
@@ -430,13 +430,13 @@ int main() {
 
     MLP *mlp = createMLP(3, nouts, 3);
     // TRAINING LOOP
-    int dataset_size = 1;
-    int num_epochs = 1;
+    int dataset_size = 4;
+    int num_epochs = 20;
     for (int epoch = 0; epoch < num_epochs; epoch++) {
         Value **epoch_losses = malloc(dataset_size * sizeof(Value*));
         for (int i = 0; i < dataset_size; i++) {
             // Forward pass
-            Value **output = forwardMLP(mlp, data[i], 1);
+            Value **output = forwardMLP(mlp, data[i], 3);
 
             // Compute loss
             Value *target = newValue(targets[i], NULL, NULL, "target", 0.0, false);
@@ -450,7 +450,7 @@ int main() {
             // Backward pass
             loss->grad = 1.0;
             _backward(loss);
-            generate_dot(mlp, data[0], num_features, *output, loss);
+            // generate_dot(mlp, data[0], num_features, *output, loss);
 
             // Update weights
             stepMLP(mlp);
@@ -469,6 +469,6 @@ int main() {
         free(epoch_losses);
         free(avg_loss);
     }
-        freeMLP(mlp);
+    freeMLP(mlp);
     return 0;
 }

@@ -1,5 +1,6 @@
 .vscode
 main.dSYM/
 a.out
+graph.dot
 logs.txt
 tests/
