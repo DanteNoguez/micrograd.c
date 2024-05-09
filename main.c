@@ -180,7 +180,7 @@ void _backward(Value *v) {
 
 Neuron *createNeuron(int nin) {
     Value **weights = malloc(nin * sizeof(Value*));
-    Value *bias = malloc(sizeof(Value*));
+    Value *bias = malloc(sizeof(Value));
     for (int i = 0; i < nin; i++) {
         char *label = malloc(10 * sizeof(char)); // we're assuming up to four digit number of weights
         sprintf(label, "weight[%d]", i);
