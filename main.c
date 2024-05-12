@@ -320,8 +320,10 @@ Value *average_losses(Value **losses, int count) {
     return avg_loss;
 }
 
-void generate_dot(MLP* mlp, Value** input_data, int input_size, Value* prediction, Value* loss) {
-    FILE* file = fopen("graph.dot", "w");
+void generate_dot(MLP* mlp, Value** input_data, int input_size, Value* prediction, Value* loss, int graph_n) {
+    char filename[20];
+    snprintf(filename, sizeof(filename), "graph%d.dot", graph_n);
+    FILE* file = fopen(filename, "w");
     if (file == NULL) {
         printf("Error opening file!\n");
         exit(1);
@@ -334,7 +336,7 @@ void generate_dot(MLP* mlp, Value** input_data, int input_size, Value* predictio
     fprintf(file, " bgcolor=transparent;\n");
     fprintf(file, " fontcolor=white;\n");
     fprintf(file, " node [shape=circle, fontsize=11, fixedsize=true, width=0.8, color=white, fontcolor=white];\n");
-    fprintf(file, " edge [arrowsize=0.7, color=white, penwidth=1.0, fontcolor=white, labeldistance=0.8, labelangle=45];\n");
+    fprintf(file, " edge [arrowsize=0.7, color=white, penwidth=1.0, fontcolor=white, labeldistance=2, labelangle=45];\n");
 
     // Create input nodes
     fprintf(file, " subgraph cluster_input {\n");
@@ -469,7 +471,7 @@ int main() {
             if (epoch == num_epochs-1) {
                 displayValue(*output);
                 displayValue(target);
-                generate_dot(mlp, data[0], num_features, *output, loss);
+                generate_dot(mlp, data[i], num_features, *output, loss, i);
             }
 
             // Zero gradients
