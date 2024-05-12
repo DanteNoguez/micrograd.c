@@ -328,57 +328,54 @@ void generate_dot(MLP* mlp, Value** input_data, int input_size, Value* predictio
     }
 
     fprintf(file, "digraph G {\n");
-    fprintf(file, "  rankdir=LR;\n");
-    fprintf(file, "  nodesep=1.0;\n");
-    fprintf(file, "  ranksep=1.5;\n");
-    fprintf(file, "  bgcolor=transparent;\n");
-    fprintf(file, "  fontcolor=white;\n");
-    fprintf(file, "  node [shape=circle, fontsize=11, fixedsize=true, width=0.8, color=white, fontcolor=white];\n");
-    fprintf(file, "  edge [arrowsize=0.7, color=white, penwidth=1.0, fontcolor=white];\n");
+    fprintf(file, " rankdir=LR;\n");
+    fprintf(file, " nodesep=1.0;\n");
+    fprintf(file, " ranksep=1.5;\n");
+    fprintf(file, " bgcolor=transparent;\n");
+    fprintf(file, " fontcolor=white;\n");
+    fprintf(file, " node [shape=circle, fontsize=11, fixedsize=true, width=0.8, color=white, fontcolor=white];\n");
+    fprintf(file, " edge [arrowsize=0.7, color=white, penwidth=1.0, fontcolor=white, labeldistance=0.8, labelangle=45];\n");
 
     // Create input nodes
-    fprintf(file, "  subgraph cluster_input {\n");
-    fprintf(file, "    style=invis;\n");
-    fprintf(file, "    rank=same;\n");
+    fprintf(file, " subgraph cluster_input {\n");
+    fprintf(file, " style=invis;\n");
+    fprintf(file, " rank=same;\n");
     for (int i = 0; i < input_size; i++) {
-        fprintf(file, "    input%d [label=\"%.4f\", fontcolor=white];\n", i, input_data[i]->data);
+        fprintf(file, " input%d [label=\"%.4f\", xlabel=\"%s\", fontcolor=white];\n", i, input_data[i]->data, input_data[i]->label);
     }
-    fprintf(file, "  }\n");
+    fprintf(file, " }\n");
 
     // Loop over hidden layers in the MLP
     for (int i = 0; i < mlp->n_layers - 1; i++) {
         Layer* layer = mlp->layers[i];
-
-        fprintf(file, "  subgraph cluster_layer%d {\n", i);
-        fprintf(file, "    style=invis;\n");
-        fprintf(file, "    rank=same;\n");
-
+        fprintf(file, " subgraph cluster_layer%d {\n", i);
+        fprintf(file, " style=invis;\n");
+        fprintf(file, " rank=same;\n");
         // Loop over neurons in the layer
         for (int j = 0; j < layer->nout; j++) {
             Neuron* neuron = layer->neurons[j];
-            fprintf(file, "    hidden%d_%d [label=\"%.4f\"];\n", i, j, neuron->bias->data);
+            fprintf(file, " hidden%d_%d [label=\"%.4f\", xlabel=\"%s\"];\n", i, j, neuron->bias->data, neuron->bias->label);
         }
-
-        fprintf(file, "  }\n");
+        fprintf(file, " }\n");
     }
 
     // Create output node
     Layer* output_layer = mlp->layers[mlp->n_layers - 1];
     Neuron* output_neuron = output_layer->neurons[0];
-    fprintf(file, "  output [label=\"%.4f\"];\n", output_neuron->bias->data);
+    fprintf(file, " output [label=\"%.4f\", xlabel=\"%s\"];\n", output_neuron->bias->data, output_neuron->bias->label);
 
     // Create prediction and loss nodes
-    fprintf(file, "  subgraph cluster_output {\n");
-    fprintf(file, "    style=invis;\n");
-    fprintf(file, "    rank=same;\n");
-    fprintf(file, "    prediction [label=\"%.4f\", shape=circle];\n", prediction->data);
-    fprintf(file, "    loss [label=\"%.4f\", shape=circle];\n", loss->data);
-    fprintf(file, "  }\n");
+    fprintf(file, " subgraph cluster_output {\n");
+    fprintf(file, " style=invis;\n");
+    fprintf(file, " rank=same;\n");
+    fprintf(file, " prediction [label=\"%.4f\", xlabel=\"%s\", shape=circle];\n", prediction->data, prediction->label);
+    fprintf(file, " loss [label=\"%.4f\", xlabel=\"%s\", shape=circle];\n", loss->data, loss->label);
+    fprintf(file, " }\n");
 
     // Connect input nodes to first hidden layer
     for (int i = 0; i < input_size; i++) {
         for (int j = 0; j < mlp->layers[0]->nout; j++) {
-            fprintf(file, "  input%d -> hidden0_%d [label=\"%.4f\", fontsize=9];\n", i, j, mlp->layers[0]->neurons[j]->weights[i]->data);
+            fprintf(file, " input%d -> hidden0_%d [label=\"%s\\n%.4f\", fontsize=9];\n", i, j, mlp->layers[0]->neurons[j]->weights[i]->label, mlp->layers[0]->neurons[j]->weights[i]->data);
         }
     }
 
@@ -386,10 +383,9 @@ void generate_dot(MLP* mlp, Value** input_data, int input_size, Value* predictio
     for (int i = 0; i < mlp->n_layers - 2; i++) {
         Layer* curr_layer = mlp->layers[i];
         Layer* next_layer = mlp->layers[i + 1];
-
         for (int j = 0; j < curr_layer->nout; j++) {
             for (int k = 0; k < next_layer->nout; k++) {
-                fprintf(file, "  hidden%d_%d -> hidden%d_%d [label=\"%.4f\", fontsize=9];\n", i, j, i + 1, k, next_layer->neurons[k]->weights[j]->data);
+                fprintf(file, " hidden%d_%d -> hidden%d_%d [label=\"%s\\n%.4f\", fontsize=9];\n", i, j, i + 1, k, next_layer->neurons[k]->weights[j]->label, next_layer->neurons[k]->weights[j]->data);
             }
         }
     }
@@ -397,12 +393,12 @@ void generate_dot(MLP* mlp, Value** input_data, int input_size, Value* predictio
     // Connect last hidden layer to output node
     Layer* last_hidden_layer = mlp->layers[mlp->n_layers - 2];
     for (int i = 0; i < last_hidden_layer->nout; i++) {
-        fprintf(file, "  hidden%d_%d -> output;\n", mlp->n_layers - 2, i);
+        fprintf(file, " hidden%d_%d -> output;\n", mlp->n_layers - 2, i);
     }
 
     // Connect output node to prediction and loss nodes
-    fprintf(file, "  output -> prediction;\n");
-    fprintf(file, "  prediction -> loss;\n");
+    fprintf(file, " output -> prediction;\n");
+    fprintf(file, " prediction -> loss;\n");
 
     fprintf(file, "}\n");
     fclose(file);
