@@ -2,6 +2,9 @@
 
 A C implementation of Karpathy's [micrograd](https://github.com/karpathy/micrograd): a scalar-valued autograd engine and a neural net library.
 
+## computational graph visuals
+![pretty](./graph.png)
+
 ## todos
 - [x] add layers
 - [x] add MLP
