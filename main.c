@@ -19,17 +19,17 @@ typedef struct Value {
 typedef struct Neuron {
     struct Value **weights;
     struct Value *bias;
-    int nin;
+    size_t nin;
 } Neuron;
 
 typedef struct Layer {
     struct Neuron **neurons;
-    int nout;
+    size_t nout;
 } Layer;
 
 typedef struct MLP {
     struct Layer **layers;
-    int n_layers;
+    size_t n_layers;
 } MLP;
 
 bool DEBUG = false;
@@ -178,7 +178,7 @@ void _backward(Value *v) {
     }
 }
 
-Neuron *createNeuron(int nin) {
+Neuron *createNeuron(size_t nin) {
     Value **weights = malloc(nin * sizeof(Value*));
     Value *bias = malloc(sizeof(Value));
     for (int i = 0; i < nin; i++) {
@@ -200,7 +200,7 @@ Neuron *createNeuron(int nin) {
     return neuron;
 }
 
-Value *forwardNeuron(Neuron *n, Value **x, int input_size) {
+Value *forwardNeuron(Neuron *n, Value **x, size_t input_size) {
     Value *sum_prods = newValue(0.0, NULL, NULL, "sum_prods", 0.0, true);
     for (int i = 0; i < input_size; i++) {
         char *label = malloc(10 * sizeof(char));
@@ -212,7 +212,7 @@ Value *forwardNeuron(Neuron *n, Value **x, int input_size) {
     return out;
 }
 
-Layer *createLayer(int nin, int nout) {
+Layer *createLayer(size_t nin, size_t nout) {
     Layer *layer = malloc(sizeof(Layer));
     Neuron **neurons = malloc(nout * sizeof(Neuron*));
     for (int i = 0; i < nout; i++) {
@@ -223,7 +223,7 @@ Layer *createLayer(int nin, int nout) {
     return layer;
 }
 
-Value **forwardLayer(Layer *layer, Value **x, int input_size) {
+Value **forwardLayer(Layer *layer, Value **x, size_t input_size) {
     Value **outputs = malloc(layer->nout * sizeof(Value*));
     for (int i = 0; i < layer->nout; i++) {
         outputs[i] = forwardNeuron(layer->neurons[i], x, input_size);
@@ -231,10 +231,10 @@ Value **forwardLayer(Layer *layer, Value **x, int input_size) {
     return outputs; 
 }
 
-MLP *createMLP(int nin, int *nouts, int n_layers) {
+MLP *createMLP(size_t nin, size_t *nouts, size_t n_layers) {
     Layer **layers = malloc(n_layers * sizeof(Layer*));
     for (int i = 0; i < n_layers; i++) {
-        int layer_nin = (i == 0) ? nin : nouts[i-1];
+        size_t layer_nin = (i == 0) ? nin : nouts[i-1];
         layers[i] = createLayer(layer_nin, nouts[i]);
     }
     MLP *mlp = malloc(sizeof(MLP));
@@ -243,9 +243,9 @@ MLP *createMLP(int nin, int *nouts, int n_layers) {
     return mlp;
 }
 
-Value **forwardMLP(MLP *mlp, Value **x, int input_size) {
+Value **forwardMLP(MLP *mlp, Value **x, size_t input_size) {
     Value **layer_outputs = x;
-    int layer_input_size = input_size;
+    size_t layer_input_size = input_size;
     for (int i = 0; i < mlp->n_layers; i++) {
         layer_outputs = forwardLayer(mlp->layers[i], layer_outputs, layer_input_size);
         layer_input_size = mlp->layers[i]->nout;
@@ -320,7 +320,7 @@ Value *average_losses(Value **losses, int count) {
     return avg_loss;
 }
 
-void generate_dot(MLP* mlp, Value** input_data, int input_size, Value* prediction, Value* loss, int graph_n) {
+void generate_dot(MLP* mlp, Value** input_data, size_t input_size, Value* prediction, Value* loss, int graph_n) {
     char filename[20];
     snprintf(filename, sizeof(filename), "graph%d.dot", graph_n);
     FILE* file = fopen(filename, "w");
@@ -395,7 +395,7 @@ void generate_dot(MLP* mlp, Value** input_data, int input_size, Value* predictio
     // Connect last hidden layer to output node
     Layer* last_hidden_layer = mlp->layers[mlp->n_layers - 2];
     for (int i = 0; i < last_hidden_layer->nout; i++) {
-        fprintf(file, " hidden%d_%d -> output;\n", mlp->n_layers - 2, i);
+        fprintf(file, " hidden%zu_%d -> output;\n", mlp->n_layers - 2, i);
     }
 
     // Connect output node to prediction and loss nodes
@@ -438,7 +438,7 @@ int main() {
     targets[2] = -1.0;
     targets[3] = 1.0;
     // NUMBER OF OUTPUTS PER LAYER
-    int *nouts = malloc(3 * sizeof(int));
+    size_t *nouts = malloc(3 * sizeof(size_t));
     nouts[0] = 4;
     nouts[1] = 3;
     nouts[2] = 1;
@@ -447,11 +447,12 @@ int main() {
     // TRAINING LOOP
     int dataset_size = 4;
     int num_epochs = 50;
+    size_t input_size = 3;
     for (int epoch = 0; epoch < num_epochs; epoch++) {
         Value **epoch_losses = malloc(dataset_size * sizeof(Value*));
         for (int i = 0; i < dataset_size; i++) {
             // Forward pass
-            Value **output = forwardMLP(mlp, data[i], 3);
+            Value **output = forwardMLP(mlp, data[i], input_size);
 
             // Compute loss
             Value *target = newValue(targets[i], NULL, NULL, "target", 0.0, false);
