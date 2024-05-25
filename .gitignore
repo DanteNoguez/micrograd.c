@@ -1,6 +1,7 @@
 .vscode
 main.dSYM/
-a.out
-graph.dot
+*.out
+*.dot
+*.png
 logs.txt
 tests/

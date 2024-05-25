@@ -19,17 +19,17 @@ typedef struct Value {
 typedef struct Neuron {
     struct Value **weights;
     struct Value *bias;
-    int nin;
+    size_t nin;
 } Neuron;
 
 typedef struct Layer {
     struct Neuron **neurons;
-    int nout;
+    size_t nout;
 } Layer;
 
 typedef struct MLP {
     struct Layer **layers;
-    int n_layers;
+    size_t n_layers;
 } MLP;
 
 bool DEBUG = false;
@@ -178,7 +178,7 @@ void _backward(Value *v) {
     }
 }
 
-Neuron *createNeuron(int nin) {
+Neuron *createNeuron(size_t nin) {
     Value **weights = malloc(nin * sizeof(Value*));
     Value *bias = malloc(sizeof(Value));
     for (int i = 0; i < nin; i++) {
@@ -200,7 +200,7 @@ Neuron *createNeuron(int nin) {
     return neuron;
 }
 
-Value *forwardNeuron(Neuron *n, Value **x, int input_size) {
+Value *forwardNeuron(Neuron *n, Value **x, size_t input_size) {
     Value *sum_prods = newValue(0.0, NULL, NULL, "sum_prods", 0.0, true);
     for (int i = 0; i < input_size; i++) {
         char *label = malloc(10 * sizeof(char));
@@ -212,7 +212,7 @@ Value *forwardNeuron(Neuron *n, Value **x, int input_size) {
     return out;
 }
 
-Layer *createLayer(int nin, int nout) {
+Layer *createLayer(size_t nin, size_t nout) {
     Layer *layer = malloc(sizeof(Layer));
     Neuron **neurons = malloc(nout * sizeof(Neuron*));
     for (int i = 0; i < nout; i++) {
@@ -223,7 +223,7 @@ Layer *createLayer(int nin, int nout) {
     return layer;
 }
 
-Value **forwardLayer(Layer *layer, Value **x, int input_size) {
+Value **forwardLayer(Layer *layer, Value **x, size_t input_size) {
     Value **outputs = malloc(layer->nout * sizeof(Value*));
     for (int i = 0; i < layer->nout; i++) {
         outputs[i] = forwardNeuron(layer->neurons[i], x, input_size);
@@ -231,10 +231,10 @@ Value **forwardLayer(Layer *layer, Value **x, int input_size) {
     return outputs; 
 }
 
-MLP *createMLP(int nin, int *nouts, int n_layers) {
+MLP *createMLP(size_t nin, size_t *nouts, size_t n_layers) {
     Layer **layers = malloc(n_layers * sizeof(Layer*));
     for (int i = 0; i < n_layers; i++) {
-        int layer_nin = (i == 0) ? nin : nouts[i-1];
+        size_t layer_nin = (i == 0) ? nin : nouts[i-1];
         layers[i] = createLayer(layer_nin, nouts[i]);
     }
     MLP *mlp = malloc(sizeof(MLP));
@@ -243,9 +243,9 @@ MLP *createMLP(int nin, int *nouts, int n_layers) {
     return mlp;
 }
 
-Value **forwardMLP(MLP *mlp, Value **x, int input_size) {
+Value **forwardMLP(MLP *mlp, Value **x, size_t input_size) {
     Value **layer_outputs = x;
-    int layer_input_size = input_size;
+    size_t layer_input_size = input_size;
     for (int i = 0; i < mlp->n_layers; i++) {
         layer_outputs = forwardLayer(mlp->layers[i], layer_outputs, layer_input_size);
         layer_input_size = mlp->layers[i]->nout;
@@ -320,72 +320,87 @@ Value *average_losses(Value **losses, int count) {
     return avg_loss;
 }
 
-void generate_dot(MLP* mlp, Value** input_data, int input_size, Value* prediction, Value* loss) {
-    FILE* file = fopen("graph.dot", "w");
+void generate_dot(MLP* mlp, Value** input_data, size_t input_size, Value* prediction, Value* loss, int graph_n) {
+    char filename[20];
+    snprintf(filename, sizeof(filename), "graph%d.dot", graph_n);
+    FILE* file = fopen(filename, "w");
     if (file == NULL) {
         printf("Error opening file!\n");
         exit(1);
     }
 
     fprintf(file, "digraph G {\n");
-    fprintf(file, "  rankdir=LR;\n");
-    fprintf(file, "  node [shape=record];\n");
+    fprintf(file, " rankdir=LR;\n");
+    fprintf(file, " nodesep=1.0;\n");
+    fprintf(file, " ranksep=1.5;\n");
+    fprintf(file, " bgcolor=transparent;\n");
+    fprintf(file, " fontcolor=white;\n");
+    fprintf(file, " node [shape=circle, fontsize=11, fixedsize=true, width=0.8, color=white, fontcolor=white];\n");
+    fprintf(file, " edge [arrowsize=0.7, color=white, penwidth=1.0, fontcolor=white, labeldistance=2, labelangle=45];\n");
 
     // Create input nodes
-    fprintf(file, "  subgraph cluster_input {\n");
-    fprintf(file, "    label=\"Input Layer\";\n");
+    fprintf(file, " subgraph cluster_input {\n");
+    fprintf(file, " style=invis;\n");
+    fprintf(file, " rank=same;\n");
     for (int i = 0; i < input_size; i++) {
-        fprintf(file, "    input%d [label=\"{<f0> |value %.4f|grad %.4f}\"];\n", i, input_data[i]->data, input_data[i]->grad);
+        fprintf(file, " input%d [label=\"%.4f\", xlabel=\"%s\", fontcolor=white];\n", i, input_data[i]->data, input_data[i]->label);
     }
-    fprintf(file, "  }\n");
+    fprintf(file, " }\n");
 
     // Loop over hidden layers in the MLP
     for (int i = 0; i < mlp->n_layers - 1; i++) {
         Layer* layer = mlp->layers[i];
-
-        fprintf(file, "  subgraph cluster_hidden%d {\n", i);
-        fprintf(file, "    label=\"Hidden Layer %d\";\n", i);
-
+        fprintf(file, " subgraph cluster_layer%d {\n", i);
+        fprintf(file, " style=invis;\n");
+        fprintf(file, " rank=same;\n");
         // Loop over neurons in the layer
         for (int j = 0; j < layer->nout; j++) {
             Neuron* neuron = layer->neurons[j];
-
-            // Create a node for the neuron
-            fprintf(file, "    hidden%d_%d [label=\"{<f0> |value %.4f|grad %.4f}\"];\n", i, j, neuron->bias->data, neuron->bias->grad);
-
-            // Create nodes and edges for weights
-            for (int k = 0; k < neuron->nin; k++) {
-                fprintf(file, "    weight%d_%d_%d [label=\"{<f0> |value %.4f|grad %.4f}\"];\n", i, j, k, neuron->weights[k]->data, neuron->weights[k]->grad);
-                if (i == 0) {
-                    fprintf(file, "    input%d -> weight%d_%d_%d;\n", k, i, j, k);
-                } else {
-                    fprintf(file, "    hidden%d_%d -> weight%d_%d_%d;\n", i-1, k, i, j, k);
-                }
-                fprintf(file, "    weight%d_%d_%d -> hidden%d_%d;\n", i, j, k, i, j);
-            }
+            fprintf(file, " hidden%d_%d [label=\"%.4f\", xlabel=\"%s\"];\n", i, j, neuron->bias->data, neuron->bias->label);
         }
-
-        fprintf(file, "  }\n");
+        fprintf(file, " }\n");
     }
 
     // Create output node
-    fprintf(file, "  subgraph cluster_output {\n");
-    fprintf(file, "    label=\"Output Layer\";\n");
     Layer* output_layer = mlp->layers[mlp->n_layers - 1];
     Neuron* output_neuron = output_layer->neurons[0];
-    fprintf(file, "    output [label=\"{<f0> |value %.4f|grad %.4f}\"];\n", output_neuron->bias->data, output_neuron->bias->grad);
-    for (int i = 0; i < output_neuron->nin; i++) {
-        fprintf(file, "    hidden%d_%d -> output;\n", mlp->n_layers - 2, i);
+    fprintf(file, " output [label=\"%.4f\", xlabel=\"%s\"];\n", output_neuron->bias->data, output_neuron->bias->label);
+
+    // Create prediction and loss nodes
+    fprintf(file, " subgraph cluster_output {\n");
+    fprintf(file, " style=invis;\n");
+    fprintf(file, " rank=same;\n");
+    fprintf(file, " prediction [label=\"%.4f\", xlabel=\"%s\", shape=circle];\n", prediction->data, prediction->label);
+    fprintf(file, " loss [label=\"%.4f\", xlabel=\"%s\", shape=circle];\n", loss->data, loss->label);
+    fprintf(file, " }\n");
+
+    // Connect input nodes to first hidden layer
+    for (int i = 0; i < input_size; i++) {
+        for (int j = 0; j < mlp->layers[0]->nout; j++) {
+            fprintf(file, " input%d -> hidden0_%d [label=\"%s\\n%.4f\", fontsize=9];\n", i, j, mlp->layers[0]->neurons[j]->weights[i]->label, mlp->layers[0]->neurons[j]->weights[i]->data);
+        }
     }
-    fprintf(file, "  }\n");
 
-    // Create prediction node
-    fprintf(file, "  prediction [label=\"{<f0> |prediction|value %.4f|grad %.4f}\"];\n", prediction->data, prediction->grad);
-    fprintf(file, "  output -> prediction;\n");
+    // Connect hidden layers
+    for (int i = 0; i < mlp->n_layers - 2; i++) {
+        Layer* curr_layer = mlp->layers[i];
+        Layer* next_layer = mlp->layers[i + 1];
+        for (int j = 0; j < curr_layer->nout; j++) {
+            for (int k = 0; k < next_layer->nout; k++) {
+                fprintf(file, " hidden%d_%d -> hidden%d_%d [label=\"%s\\n%.4f\", fontsize=9];\n", i, j, i + 1, k, next_layer->neurons[k]->weights[j]->label, next_layer->neurons[k]->weights[j]->data);
+            }
+        }
+    }
 
-    // Create loss node
-    fprintf(file, "  loss [label=\"{<f0> |loss|value %.4f|grad %.4f}\"];\n", loss->data, loss->grad);
-    fprintf(file, "  prediction -> loss;\n");
+    // Connect last hidden layer to output node
+    Layer* last_hidden_layer = mlp->layers[mlp->n_layers - 2];
+    for (int i = 0; i < last_hidden_layer->nout; i++) {
+        fprintf(file, " hidden%zu_%d -> output;\n", mlp->n_layers - 2, i);
+    }
+
+    // Connect output node to prediction and loss nodes
+    fprintf(file, " output -> prediction;\n");
+    fprintf(file, " prediction -> loss;\n");
 
     fprintf(file, "}\n");
     fclose(file);
@@ -423,20 +438,21 @@ int main() {
     targets[2] = -1.0;
     targets[3] = 1.0;
     // NUMBER OF OUTPUTS PER LAYER
-    int *nouts = malloc(3 * sizeof(int));
+    size_t *nouts = malloc(3 * sizeof(size_t));
     nouts[0] = 4;
-    nouts[1] = 4;
+    nouts[1] = 3;
     nouts[2] = 1;
 
     MLP *mlp = createMLP(3, nouts, 3);
     // TRAINING LOOP
     int dataset_size = 4;
-    int num_epochs = 20;
+    int num_epochs = 50;
+    size_t input_size = 3;
     for (int epoch = 0; epoch < num_epochs; epoch++) {
         Value **epoch_losses = malloc(dataset_size * sizeof(Value*));
         for (int i = 0; i < dataset_size; i++) {
             // Forward pass
-            Value **output = forwardMLP(mlp, data[i], 3);
+            Value **output = forwardMLP(mlp, data[i], input_size);
 
             // Compute loss
             Value *target = newValue(targets[i], NULL, NULL, "target", 0.0, false);
@@ -450,10 +466,14 @@ int main() {
             // Backward pass
             loss->grad = 1.0;
             _backward(loss);
-            // generate_dot(mlp, data[0], num_features, *output, loss);
-
+            
             // Update weights
             stepMLP(mlp);
+            if (epoch == num_epochs-1) {
+                displayValue(*output);
+                displayValue(target);
+                generate_dot(mlp, data[i], num_features, *output, loss, i);
+            }
 
             // Zero gradients
             zeroGrad(mlp);
