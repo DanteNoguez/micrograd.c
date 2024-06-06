@@ -13,7 +13,7 @@ typedef struct Value {
     struct Value **previous;
     char *label;
     float grad;
-    bool requires_grad;
+    bool requiresGrad;
 } Value;
 
 typedef struct Neuron {
@@ -29,13 +29,13 @@ typedef struct Layer {
 
 typedef struct MLP {
     struct Layer **layers;
-    size_t n_layers;
+    size_t nLayers;
 } MLP;
 
 bool DEBUG = false;
 
 // Constructor for Value
-Value *newValue(float data, char *operation, struct Value **previous, char *label, float grad, bool requires_grad) {
+Value *newValue(float data, char *operation, struct Value **previous, char *label, float grad, bool requiresGrad) {
     Value *v = malloc(sizeof(Value));
     if (v == NULL) {
         fprintf(stderr, "Memory allocation for new value failed\n");
@@ -46,7 +46,7 @@ Value *newValue(float data, char *operation, struct Value **previous, char *labe
     v->previous = previous;
     v->label = label;
     v->grad = grad;
-    v->requires_grad = requires_grad;
+    v->requiresGrad = requiresGrad;
     return v;
 }
 
@@ -130,7 +130,7 @@ void _backward(Value *v) {
         // no grad to compute
         return;
     }
-    if (v->requires_grad == false) {
+    if (v->requiresGrad == false) {
         // no grad to compute
         return;
     }
@@ -181,6 +181,10 @@ void _backward(Value *v) {
 Neuron *createNeuron(size_t nin) {
     Value **weights = malloc(nin * sizeof(Value*));
     Value *bias = malloc(sizeof(Value));
+    if (bias == NULL || weights == NULL) {
+        fprintf(stderr, "Memory allocation for Neuron bias or weights failed\n");
+        exit(EXIT_FAILURE);
+    }
     for (int i = 0; i < nin; i++) {
         char *label = malloc(10 * sizeof(char)); // we're assuming up to four digit number of weights
         sprintf(label, "weight[%d]", i);
@@ -194,27 +198,35 @@ Neuron *createNeuron(size_t nin) {
         printf("Neuron Bias = %f\n", bias->data);
     }
     Neuron *neuron = malloc(sizeof(Neuron));
+    if (neuron == NULL) {
+        fprintf(stderr, "Memory allocation for Neuron failed\n");
+        exit(EXIT_FAILURE);
+    }
     neuron->bias = bias;
     neuron->weights = weights;
     neuron->nin = nin;
     return neuron;
 }
 
-Value *forwardNeuron(Neuron *n, Value **x, size_t input_size) {
-    Value *sum_prods = newValue(0.0, NULL, NULL, "sum_prods", 0.0, true);
-    for (int i = 0; i < input_size; i++) {
+Value *forwardNeuron(Neuron *n, Value **x, size_t inputSize) {
+    Value *sumProds = newValue(0.0, NULL, NULL, "sumProds", 0.0, true);
+    for (int i = 0; i < inputSize; i++) {
         char *label = malloc(10 * sizeof(char));
         sprintf(label, "x*w[%d]", i);
         Value *prod = mul(x[i], n->weights[i], label);
-        sum_prods = sum(sum_prods, prod, "sum_prods");
+        sumProds = sum(sumProds, prod, "sumProds");
     }
-    Value *out = htan(sum(sum_prods, n->bias, "sum_bias"), "tanh");
+    Value *out = htan(sum(sumProds, n->bias, "sumBias"), "tanh");
     return out;
 }
 
 Layer *createLayer(size_t nin, size_t nout) {
     Layer *layer = malloc(sizeof(Layer));
     Neuron **neurons = malloc(nout * sizeof(Neuron*));
+    if (neurons == NULL || layer == NULL) {
+        fprintf(stderr, "Memory allocation for Layer or Neurons failed\n");
+        exit(EXIT_FAILURE);
+    }
     for (int i = 0; i < nout; i++) {
         neurons[i] = createNeuron(nin);
     }
@@ -223,38 +235,46 @@ Layer *createLayer(size_t nin, size_t nout) {
     return layer;
 }
 
-Value **forwardLayer(Layer *layer, Value **x, size_t input_size) {
+Value **forwardLayer(Layer *layer, Value **x, size_t inputSize) {
     Value **outputs = malloc(layer->nout * sizeof(Value*));
     for (int i = 0; i < layer->nout; i++) {
-        outputs[i] = forwardNeuron(layer->neurons[i], x, input_size);
+        outputs[i] = forwardNeuron(layer->neurons[i], x, inputSize);
     }
     return outputs; 
 }
 
-MLP *createMLP(size_t nin, size_t *nouts, size_t n_layers) {
-    Layer **layers = malloc(n_layers * sizeof(Layer*));
-    for (int i = 0; i < n_layers; i++) {
-        size_t layer_nin = (i == 0) ? nin : nouts[i-1];
-        layers[i] = createLayer(layer_nin, nouts[i]);
+MLP *createMLP(size_t nin, size_t *nouts, size_t nLayers) {
+    Layer **layers = malloc(nLayers * sizeof(Layer*));
+    if (layers == NULL) {
+        fprintf(stderr, "Memory allocation for Layers failed\n");
+        exit(EXIT_FAILURE);
+    }
+    for (int i = 0; i < nLayers; i++) {
+        size_t layerNin = (i == 0) ? nin : nouts[i-1];
+        layers[i] = createLayer(layerNin, nouts[i]);
     }
     MLP *mlp = malloc(sizeof(MLP));
+    if (mlp == NULL) {
+        fprintf(stderr, "Memory allocation for MLP failed\n");
+        exit(EXIT_FAILURE);
+    }
     mlp->layers = layers;
-    mlp->n_layers = n_layers;
+    mlp->nLayers = nLayers;
     return mlp;
 }
 
-Value **forwardMLP(MLP *mlp, Value **x, size_t input_size) {
-    Value **layer_outputs = x;
-    size_t layer_input_size = input_size;
-    for (int i = 0; i < mlp->n_layers; i++) {
-        layer_outputs = forwardLayer(mlp->layers[i], layer_outputs, layer_input_size);
-        layer_input_size = mlp->layers[i]->nout;
+Value **forwardMLP(MLP *mlp, Value **x, size_t inputSize) {
+    Value **layerOutputs = x;
+    size_t layerInputSize = inputSize;
+    for (int i = 0; i < mlp->nLayers; i++) {
+        layerOutputs = forwardLayer(mlp->layers[i], layerOutputs, layerInputSize);
+        layerInputSize = mlp->layers[i]->nout;
     }
-    return layer_outputs;
+    return layerOutputs;
 }
 
 void freeMLP(MLP *mlp) {
-    for (int i = 0; i < mlp->n_layers; i++) {
+    for (int i = 0; i < mlp->nLayers; i++) {
         Layer *layer = mlp->layers[i];
         for (int j = 0; j < layer->nout; j++) {
             Neuron *neuron = layer->neurons[j];
@@ -273,18 +293,18 @@ void freeMLP(MLP *mlp) {
 }
 
 void stepMLP(MLP *mlp) {
-    float learning_rate = 0.01;
-    for (int i = 0; i < mlp->n_layers; i++) {
+    float learningRate = 0.01;
+    for (int i = 0; i < mlp->nLayers; i++) {
         Layer *layer = mlp->layers[i];
         for (int j = 0; j < layer->nout; j++) {
             Neuron *neuron = layer->neurons[j];
             for (int k = 0; k < neuron->nin; k++) {
-                neuron->weights[k]->data += learning_rate * -neuron->weights[k]->grad;
+                neuron->weights[k]->data += learningRate * -neuron->weights[k]->grad;
                 if (DEBUG == true) {
                     printf("Gradient for layer %d, neuron %d, weight %d: %.8f\n", i, j, k, neuron->weights[k]->grad);
                 }
             }
-            neuron->bias->data += learning_rate * -neuron->bias->grad;
+            neuron->bias->data += learningRate * -neuron->bias->grad;
             if (DEBUG == true) {
                 printf("Gradient for layer %d, neuron %d, bias: %.8f\n", i, j, neuron->bias->grad);
             }
@@ -293,7 +313,7 @@ void stepMLP(MLP *mlp) {
 }
 
 void zeroGrad(MLP *mlp) {
-    for (int i = 0; i < mlp->n_layers; i++) {
+    for (int i = 0; i < mlp->nLayers; i++) {
         Layer *layer = mlp->layers[i];
         for (int j = 0; j < layer->nout; j++) {
             Neuron *neuron = layer->neurons[j];
@@ -305,24 +325,24 @@ void zeroGrad(MLP *mlp) {
     }
 }
 
-Value *squared_error_loss(Value *prediction, Value *target) {
+Value *squaredErrorLoss(Value *prediction, Value *target) {
     Value *error = sum(prediction, mul(target, newValue(-1.0, NULL, NULL, "neg_target", 0.0, false), "neg_target"), "error");
-    Value *squared_error = pow2(error, "squared_error");
-    return squared_error;
+    Value *squaredError = pow2(error, "squaredError");
+    return squaredError;
 }
 
-Value *average_losses(Value **losses, int count) {
-    Value *sum_losses = losses[0]; // Start with the first loss
+Value *averageLosses(Value **losses, int count) {
+    Value *sumLosses = losses[0]; // Start with the first loss
     for (int i = 1; i < count; i++) {
-        sum_losses = sum(sum_losses, losses[i], "sum_losses");
+        sumLosses = sum(sumLosses, losses[i], "sumLosses");
     }
-    Value *avg_loss = mul(sum_losses, newValue(1.0 / count, NULL, NULL, "reciprocal_count", 0.0, false), "average_loss"); // Multiply sum by reciprocal of count
-    return avg_loss;
+    Value *avgLoss = mul(sumLosses, newValue(1.0 / count, NULL, NULL, "reciprocalCount", 0.0, false), "averageLoss"); // Multiply sum by reciprocal of count
+    return avgLoss;
 }
 
-void generate_dot(MLP* mlp, Value** input_data, size_t input_size, Value* prediction, Value* loss, int graph_n) {
+void generateDot(MLP* mlp, Value** inputData, size_t inputSize, Value* prediction, Value* loss, int graphN) {
     char filename[20];
-    snprintf(filename, sizeof(filename), "graph%d.dot", graph_n);
+    snprintf(filename, sizeof(filename), "graph%d.dot", graphN);
     FILE* file = fopen(filename, "w");
     if (file == NULL) {
         printf("Error opening file!\n");
@@ -342,13 +362,13 @@ void generate_dot(MLP* mlp, Value** input_data, size_t input_size, Value* predic
     fprintf(file, " subgraph cluster_input {\n");
     fprintf(file, " style=invis;\n");
     fprintf(file, " rank=same;\n");
-    for (int i = 0; i < input_size; i++) {
-        fprintf(file, " input%d [label=\"%.4f\", xlabel=\"%s\", fontcolor=white];\n", i, input_data[i]->data, input_data[i]->label);
+    for (int i = 0; i < inputSize; i++) {
+        fprintf(file, " input%d [label=\"%.4f\", xlabel=\"%s\", fontcolor=white];\n", i, inputData[i]->data, inputData[i]->label);
     }
     fprintf(file, " }\n");
 
     // Loop over hidden layers in the MLP
-    for (int i = 0; i < mlp->n_layers - 1; i++) {
+    for (int i = 0; i < mlp->nLayers - 1; i++) {
         Layer* layer = mlp->layers[i];
         fprintf(file, " subgraph cluster_layer%d {\n", i);
         fprintf(file, " style=invis;\n");
@@ -362,7 +382,7 @@ void generate_dot(MLP* mlp, Value** input_data, size_t input_size, Value* predic
     }
 
     // Create output node
-    Layer* output_layer = mlp->layers[mlp->n_layers - 1];
+    Layer* output_layer = mlp->layers[mlp->nLayers - 1];
     Neuron* output_neuron = output_layer->neurons[0];
     fprintf(file, " output [label=\"%.4f\", xlabel=\"%s\"];\n", output_neuron->bias->data, output_neuron->bias->label);
 
@@ -375,27 +395,27 @@ void generate_dot(MLP* mlp, Value** input_data, size_t input_size, Value* predic
     fprintf(file, " }\n");
 
     // Connect input nodes to first hidden layer
-    for (int i = 0; i < input_size; i++) {
+    for (int i = 0; i < inputSize; i++) {
         for (int j = 0; j < mlp->layers[0]->nout; j++) {
             fprintf(file, " input%d -> hidden0_%d [label=\"%s\\n%.4f\", fontsize=9];\n", i, j, mlp->layers[0]->neurons[j]->weights[i]->label, mlp->layers[0]->neurons[j]->weights[i]->data);
         }
     }
 
     // Connect hidden layers
-    for (int i = 0; i < mlp->n_layers - 2; i++) {
-        Layer* curr_layer = mlp->layers[i];
-        Layer* next_layer = mlp->layers[i + 1];
-        for (int j = 0; j < curr_layer->nout; j++) {
-            for (int k = 0; k < next_layer->nout; k++) {
-                fprintf(file, " hidden%d_%d -> hidden%d_%d [label=\"%s\\n%.4f\", fontsize=9];\n", i, j, i + 1, k, next_layer->neurons[k]->weights[j]->label, next_layer->neurons[k]->weights[j]->data);
+    for (int i = 0; i < mlp->nLayers - 2; i++) {
+        Layer* currLayer = mlp->layers[i];
+        Layer* nextLayer = mlp->layers[i + 1];
+        for (int j = 0; j < currLayer->nout; j++) {
+            for (int k = 0; k < nextLayer->nout; k++) {
+                fprintf(file, " hidden%d_%d -> hidden%d_%d [label=\"%s\\n%.4f\", fontsize=9];\n", i, j, i + 1, k, nextLayer->neurons[k]->weights[j]->label, nextLayer->neurons[k]->weights[j]->data);
             }
         }
     }
 
     // Connect last hidden layer to output node
-    Layer* last_hidden_layer = mlp->layers[mlp->n_layers - 2];
-    for (int i = 0; i < last_hidden_layer->nout; i++) {
-        fprintf(file, " hidden%zu_%d -> output;\n", mlp->n_layers - 2, i);
+    Layer* lastHiddenLayer = mlp->layers[mlp->nLayers - 2];
+    for (int i = 0; i < lastHiddenLayer->nout; i++) {
+        fprintf(file, " hidden%zu_%d -> output;\n", mlp->nLayers - 2, i);
     }
 
     // Connect output node to prediction and loss nodes
@@ -410,22 +430,22 @@ int main() {
     srand((unsigned int)time(NULL));
     // DATA
     // 4 data points, each containing an array of 3 Values
-    int num_features = 3;
-    int num_data_points = 4;
-    Value ***data = malloc(num_data_points * sizeof(Value**));
-    float predefined_values[4][3] = {
+    int numFeatures = 3;
+    int numDataPoints = 4;
+    Value ***data = malloc(numDataPoints * sizeof(Value**));
+    float predefinedValues[4][3] = {
         {2, 3, -1},
         {3, -1, 0.5},
         {0.5, 1, 1},
         {1, 1, -1}
     };
 
-    for (int i = 0; i < num_data_points; i++) {
-        data[i] = malloc(num_features * sizeof(Value*));
-        for (int j = 0; j < num_features; j++) {
+    for (int i = 0; i < numDataPoints; i++) {
+        data[i] = malloc(numFeatures * sizeof(Value*));
+        for (int j = 0; j < numFeatures; j++) {
             char *label = malloc(20 * sizeof(char));
             sprintf(label, "data[%d][%d]", i, j);
-            data[i][j] = newValue(predefined_values[i][j], NULL, NULL, label, 0.0, false);
+            data[i][j] = newValue(predefinedValues[i][j], NULL, NULL, label, 0.0, false);
             if (DEBUG == true) {
                 printf("creating data point %f with label %s\n", data[i][j]->data, label);
             }
@@ -445,14 +465,14 @@ int main() {
 
     MLP *mlp = createMLP(3, nouts, 3);
     // TRAINING LOOP
-    int dataset_size = 4;
-    int num_epochs = 50;
-    size_t input_size = 3;
-    for (int epoch = 0; epoch < num_epochs; epoch++) {
-        Value **epoch_losses = malloc(dataset_size * sizeof(Value*));
-        for (int i = 0; i < dataset_size; i++) {
+    int datasetSize = 4;
+    int numEpochs = 50;
+    size_t inputSize = 3;
+    for (int epoch = 0; epoch < numEpochs; epoch++) {
+        Value **epochLosses = malloc(datasetSize * sizeof(Value*));
+        for (int i = 0; i < datasetSize; i++) {
             // Forward pass
-            Value **output = forwardMLP(mlp, data[i], input_size);
+            Value **output = forwardMLP(mlp, data[i], inputSize);
 
             // Compute loss
             Value *target = newValue(targets[i], NULL, NULL, "target", 0.0, false);
@@ -460,8 +480,8 @@ int main() {
                 displayValue(*output);
                 displayValue(target);
             }
-            Value *loss = squared_error_loss(*output, target);
-            epoch_losses[i] = loss;
+            Value *loss = squaredErrorLoss(*output, target);
+            epochLosses[i] = loss;
 
             // Backward pass
             loss->grad = 1.0;
@@ -469,25 +489,25 @@ int main() {
             
             // Update weights
             stepMLP(mlp);
-            if (epoch == num_epochs-1) {
+            if (epoch == numEpochs-1) {
                 displayValue(*output);
                 displayValue(target);
-                generate_dot(mlp, data[i], num_features, *output, loss, i);
+                generateDot(mlp, data[i], numFeatures, *output, loss, i);
             }
 
             // Zero gradients
             zeroGrad(mlp);
         }
         // Compute average loss for the epoch
-        Value *avg_loss = average_losses(epoch_losses, dataset_size);
-        printf("Epoch %d, Loss: %.4f\n", epoch, avg_loss->data);
+        Value *avgLoss = averageLosses(epochLosses, datasetSize);
+        printf("Epoch %d, Loss: %.4f\n", epoch, avgLoss->data);
 
         // Free memory
-        for (int i = 0; i < dataset_size; i++) {
-            free(epoch_losses[i]);
+        for (int i = 0; i < datasetSize; i++) {
+            free(epochLosses[i]);
         }
-        free(epoch_losses);
-        free(avg_loss);
+        free(epochLosses);
+        free(avgLoss);
     }
     freeMLP(mlp);
     return 0;
