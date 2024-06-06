@@ -5,3 +5,4 @@ main.dSYM/
 *.png
 logs.txt
 tests/
+graphs/
