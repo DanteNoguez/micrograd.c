@@ -279,6 +279,7 @@ void freeMLP(MLP *mlp) {
         for (int j = 0; j < layer->nout; j++) {
             Neuron *neuron = layer->neurons[j];
             for (int k = 0; k < neuron->nin; k++) {
+                free(neuron->weights[k]->label);
                 free(neuron->weights[k]);
             }
             free(neuron->weights);
@@ -510,5 +511,15 @@ int main() {
         free(avgLoss);
     }
     freeMLP(mlp);
+    for (int i = 0; i < numDataPoints; i++) {
+         for (int j = 0; j < numFeatures; j++) {
+             free(data[i][j]->label);
+             free(data[i][j]);
+         }
+         free(data[i]);
+     }
+    free(data);
+    free(targets);
+    free(nouts);
     return 0;
 }
