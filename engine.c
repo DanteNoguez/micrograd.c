@@ -1,8 +1,3 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <stdbool.h>
-#include <math.h>
-
 #include "engine.h"
 
 Value *newValue(float data, char *operation, struct Value **previous, char *label, float grad, bool requiresGrad) {

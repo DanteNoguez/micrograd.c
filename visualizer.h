@@ -1,5 +1,7 @@
 #ifndef VISUALIZER_H
 #define VISUALIZER_H
+#include <stdio.h>
+#include <stdlib.h>
 #include "engine.h"
 #include "nn.h"
 

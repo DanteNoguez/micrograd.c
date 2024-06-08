@@ -1,7 +1,12 @@
 #ifndef NN_H
 #define NN_H
+#include <stdio.h>
+#include <stdlib.h>
+#include <stdbool.h>
+#include <string.h>
+#include <math.h>
+
 #include "engine.h"
-#include <stddef.h>
 
 // Structs
 typedef struct Neuron {
