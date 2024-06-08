@@ -1,6 +1,5 @@
 .vscode
 main.dSYM/
-*.out
 *.dot
 *.png
 logs.txt
